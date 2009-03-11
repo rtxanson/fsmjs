@@ -29,17 +29,18 @@ function FSM( )
 	setE( 0, 1, EPS , EPS, 0.4 );
 	setE( 1, 0, EPS , EPS, 0.5 );
 */
-	/*
+	
 	//setE( 4, 3, EPS , EPS, 2);
 	//setE( 3, 5, EPS , EPS, 3);
-	setE( 0, 0, EPS , EPS, 1/5);
+	//setE( 0, 0, EPS , EPS, 1/5);
 	setE( 0, 1, 0 );
-	setE( 0, 2, 0 );
+	setE( 0, 2, 1 );
 
 	setI( 0 );
-	setF( 1 );
-	setF( 2 );
-	*/
+	setF( 1, 0.5 );
+	setF( 2, 0.4 );
+	
+/*
 	setE( 0, 1, 0, 0, 0.25 );
 	setE( 0, 1, EPS, EPS, 0.5 );
 	setE( 1, 1, EPS, EPS, 0.2 );
@@ -47,6 +48,7 @@ function FSM( )
 	setI( 1, 1 );
 	setF( 1, 0.3 );
 	setF( 0, 0.25 );
+*/
 
 	// general helpers  --------------------------------------------------------------------
 
@@ -186,7 +188,7 @@ function FSM( )
 			if ( this.isFinal( finalState ) ) {
 				for ( var initialState in states ) {
 					if ( this.isInitial( initialState ) ) {
-						setE( finalState, initialState, EPS );
+						setE( finalState, initialState, EPS, EPS, getF( finalState ) );
 					}
 				}
 			}
@@ -253,44 +255,41 @@ function FSM( )
 	this.removeEpsilon = function()
 	{
 		var epsClosure = [];
-		for ( state in states ) {
-			epsClosure[state] = this.epsClosure( state ); 
+		for ( p in states ) {
+			epsClosure[p] = this.epsClosure( p ); 
 		}
 
-		for ( state in states ) {
-			for ( var q in epsClosure[state] ) {
+		for ( p in states ) {
+			for ( var q in epsClosure[p] ) {
 				for ( var r in states[q][E] ) {
 					for ( var a in states[q][E][r] ) {
 						if ( a != EPS ) {
 							for ( var b in states[q][E][r][a] ) {
 								if ( b != EPS ) {
 									setE( 
-										state, 
-										r, 
-										a, 
-										b, 
+										p, r, a, b, 
 										this.abstractProduct( 
-											epsClosure[state][q], 
+											epsClosure[p][q], 
 											getE( q, r, a, b ) 
 										)
 									);
 									setF(
-										state,
+										p,
 										this.abstractSum(
-											( state != q ?  getF( state ) : ABSTRACT0 ),
+											( p != q ?  getF( p ) : ABSTRACT0 ),
 											this.abstractProduct(
-												epsClosure[state][q],
+												epsClosure[p][q],
 												getF( q )
 											)
 										)
 									);
 /*
 									alert( 
-										"state: " + state + 
+										"p: " + p + 
 										", target: " + q + 
 										", next: " + r + 
-										", E: " + getE( state, r, a, b ) +
-										", F(" + state + "): " + getF( state )
+										", E: " + getE( p, r, a, b ) +
+										", F(" + p + "): " + getF( p )
 									);
 */
 								}
@@ -298,7 +297,7 @@ function FSM( )
 						}
 					}
 				}
-				unsetE( state, q, EPS, EPS );
+				unsetE( p, q, EPS, EPS );
 			}
 		}
 	}
@@ -354,9 +353,10 @@ function FSM( )
 fsm1 = new FSM();
 //alert( dump( fsm1.epsClosure(0) ) );
 //alert( dump( fsm1.epsClosure(1) ) );
-//fsm1.print();
-//fsm1.star();
 fsm1.print();
+fsm1.plus();
+fsm1.print();
+
 fsm1.removeEpsilon();
 fsm1.print();
 //fsm1.star();
