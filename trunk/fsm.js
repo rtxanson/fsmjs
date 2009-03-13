@@ -1,18 +1,39 @@
 var symbols = ['a','b','c'];
 symbols[-1] = '<eps>';
+const EPS = -1;
+
+
+var realSemiring = {
+	// a = abstract
+	aSum: function( w1, w2 ) 
+		{
+			return w1 + w2;
+		},
+	aProduct: function( w1, w2 ) 
+		{
+			return w1 * w2;
+		},
+	a0: 0,
+	a1: 1,
+	aProductClosure: function ( w ) 
+	{
+		if ( w >= 1 ) {
+			return undefined;
+		}
+		return 1 / ( 1 - w );
+	}
+}
 
 function FSM( )
 {
 	var states = [];
 
 	const E = 0;	// transitions
-	const F = 1;	// final weight
-	const I = 2;	// initial weight
+	const F = 1;	// final w
+	const I = 2;	// initial w
 
-	const EPS = -1;
 
-	const ABSTRACT0 = 0;
-	const ABSTRACT1 = 1;
+	var s = realSemiring;
 
 /*
  * variable names:
@@ -23,32 +44,11 @@ function FSM( )
  * a = input symbol
  * b = output symbol
  *
+ * s = semiring
+ *
  */
 
-/*
-	setE( 0, 1, EPS , EPS, 0.4 );
-	setE( 1, 0, EPS , EPS, 0.5 );
-*/
-	
-	//setE( 4, 3, EPS , EPS, 2);
-	//setE( 3, 5, EPS , EPS, 3);
-	//setE( 0, 0, EPS , EPS, 1/5);
-	setE( 0, 1, 0 );
-	setE( 0, 2, 1 );
 
-	setI( 0 );
-	setF( 1, 0.5 );
-	setF( 2, 0.4 );
-	
-/*
-	setE( 0, 1, 0, 0, 0.25 );
-	setE( 0, 1, EPS, EPS, 0.5 );
-	setE( 1, 1, EPS, EPS, 0.2 );
-	setE( 1, 0, 1, 1, 0.5 );
-	setI( 1, 1 );
-	setF( 1, 0.3 );
-	setF( 0, 0.25 );
-*/
 
 	// general helpers  --------------------------------------------------------------------
 
@@ -72,24 +72,24 @@ function FSM( )
 	{
 		states[state] = [];
 		states[state][E] = {};
-		states[state][F] = ABSTRACT0;
-		states[state][I] = ABSTRACT0;
+		states[state][F] = s.a0;
+		states[state][I] = s.a0;
 	}
 
-	function setE( p, q, a, b, weight ) 
+	this.setE = function( p, q, a, b, w ) 
 	{
 		if (! b ) b = a;
-		if (! weight ) weight = ABSTRACT1;
+		if (! w ) w = s.a1;
 
 		ensureState( p );
 		ensureState( q );
 		if (! states[p][E][q] ) states[p][E][q] = {}; 
 		if (! states[p][E][q][a] ) states[p][E][q][a] = {}; 
 		
-		states[p][E][q][a][b] = weight;
+		states[p][E][q][a][b] = w;
 	}
 
-	function isE( p, q, a, b ) 
+	this.isE = function( p, q, a, b ) 
 	{
 		return (
 			( states[p][E][q] != undefined ) &&
@@ -98,9 +98,9 @@ function FSM( )
 		);
 	}
 	
-	function unsetE( p, q, a, b ) 
+	this.unsetE = function( p, q, a, b ) 
 	{
-		if (! isE( p, q, a, b ) ) return;
+		if (! this.isE( p, q, a, b ) ) return;
 		delete states[p][E][q][a][b];
 		/*
 		if ( a == undefined ) {
@@ -115,136 +115,135 @@ function FSM( )
 		*/
 	}
 
-	function getE( p, q, a, b ) 
+	this.getE = function( p, q, a, b ) 
 	{
 		/*
 		if ( q == undefined ) return states[p][E]; 
 		if ( a == undefined ) return states[p][E][q]; 
 		if ( b == undefined ) return states[p][E][q][a];
 		*/
-		if (! isE( p, q, a, b ) ) return ABSTRACT0;
+		if (! this.isE( p, q, a, b ) ) return s.a0;
 		return states[p][E][q][a][b];
 	}
 
-	function setI( state, weight ) 
+	this.setI = function( state, w ) 
 	{
-		if ( weight == undefined ) weight = ABSTRACT1;
+		if ( w == undefined ) w = s.a1;
 		ensureState( state );
-		states[state][I] = weight;
+		states[state][I] = w;
 	}
 
-	function unsetI( state ) 
+	this.unsetI = function( state ) 
 	{
 		ensureState( state );
-		states[state][I] = ABSTRACT0;
+		states[state][I] = s.a0;
 	}
 
-	function setF( state, weight ) 
+	this.setF = function( state, w ) 
 	{
-		if ( weight == undefined ) weight = ABSTRACT1;
+		if ( w == undefined ) w = s.a1;
 		ensureState( state );
-		states[state][F] = weight;
+		states[state][F] = w;
 	}
 
-	function getF( state ) 
+	this.getF = function( state ) 
 	{
 		ensureState( state );
 		return states[state][F];
 	}
 
 	this.isInitial = function( state ) {
-		return ( states[state][I] != ABSTRACT0 );
+		return ( states[state][I] != s.a0 );
 	}
 
 	this.isFinal = function( state ) {
-		return ( states[state][F] != ABSTRACT0 );
+		return ( states[state][F] != s.a0 );
 	}
 
+	/*
 	// semiring  --------------------------------------------------------------------
 
-	this.abstractSum = function( weight1, weight2 )
+	s.aSum = function( w1, w2 )
 	{
-		return weight1 + weight2;
+		return w1 + w2;
 	}
 
-	this.abstractProduct = function( weight1, weight2 )
+	s.aProduct = function( w1, w2 )
 	{
-		return weight1 * weight2;
+		return w1 * w2;
 	}
 
-	this.abstractProductClosure = function( weight )
+	s.aProductClosure = function( w )
 	{
-		if ( weight >= 1 ) {
+		if ( w >= 1 ) {
 			return undefined;
 		}
-		return 1 / ( 1 - weight );
+		return 1 / ( 1 - w );
 	}
-
+*/
 	// operations  --------------------------------------------------------------------
 
-	this.plus = function()
+	this.plusClosure = function()
 	{
 		for ( var finalState in states ) {
 			if ( this.isFinal( finalState ) ) {
 				for ( var initialState in states ) {
 					if ( this.isInitial( initialState ) ) {
-						setE( finalState, initialState, EPS, EPS, getF( finalState ) );
+						this.setE( finalState, initialState, EPS, EPS, this.getF(finalState) );
 					}
 				}
 			}
 		}
 	}
 
-	this.star = function()
+	this.starClosure = function()
 	{
-		this.plus();
+		this.plusClosure();
 		var newState = states.length;
 		createState( newState );
 		for ( var initialState in states ) {
 			if ( this.isInitial( initialState ) ) {
-				setE( newState, initialState, EPS );
-				unsetI( initialState );
+				this.setE( newState, initialState, EPS );
+				this.unsetI( initialState );
 			}
 		}
-		setI( newState );
-		setF( newState );
+		this.setI( newState );
+		this.setF( newState );
 	}
 
 
-	this.epsClosure = function( state, weightToState, epsClosure )
+	this.epsClosure = function( state, wToState, epsClosure )
 	{
-		if ( weightToState == undefined ) var weightToState = ABSTRACT1;
+		if ( wToState == undefined ) var wToState = s.a1;
 		if ( epsClosure == undefined ) var epsClosure = {};
-		//epsClosure[state] = ABSTRACT0;
-		epsClosure[state] = weightToState;
+		//epsClosure[state] = s.a0;
+		epsClosure[state] = wToState;
 
 		for ( var q in states[state][E] ) {
 			for ( var a in states[state][E][q] ) {
-				if ( a == EPS ) {
-					for ( var b in states[state][E][q][a] ) {
-						if ( b == EPS ) {
-							// check if q already in closure
-							if (! epsClosure[q] ) {
-								epsClosure[q] = this.abstractProduct(
-									weightToState,
+				if ( a != EPS ) continue;
+				for ( var b in states[state][E][q][a] ) {
+					if ( b != EPS ) continue;
+					// check if q already in closure
+					if (! epsClosure[q] ) {
+						epsClosure[q] = s.aProduct(
+							wToState,
+							states[state][E][q][a][b]
+						);
+						extendObject( 
+							epsClosure, 
+							this.epsClosure( q, epsClosure[q], epsClosure ) 
+						);
+					} else {
+						epsClosure[q] = s.aProduct(
+							epsClosure[q],
+							s.aProductClosure(
+								s.aProduct(
+									wToState/epsClosure[q],
 									states[state][E][q][a][b]
-								);
-								extendObject( 
-									epsClosure, 
-									this.epsClosure( q, epsClosure[q], epsClosure ) 
-								);
-							} else {
-								epsClosure[q] = this.abstractProduct(
-									epsClosure[q],
-									this.abstractProductClosure(
-										this.abstractProduct(
-											weightToState/epsClosure[q],
-											states[state][E][q][a][b]
-										)
-									)
-								);
-							}
-						}
+								)
+							)
+						);
 					}
 				}
 			}
@@ -263,41 +262,39 @@ function FSM( )
 			for ( var q in epsClosure[p] ) {
 				for ( var r in states[q][E] ) {
 					for ( var a in states[q][E][r] ) {
-						if ( a != EPS ) {
-							for ( var b in states[q][E][r][a] ) {
-								if ( b != EPS ) {
-									setE( 
-										p, r, a, b, 
-										this.abstractProduct( 
-											epsClosure[p][q], 
-											getE( q, r, a, b ) 
-										)
-									);
-									setF(
-										p,
-										this.abstractSum(
-											( p != q ?  getF( p ) : ABSTRACT0 ),
-											this.abstractProduct(
-												epsClosure[p][q],
-												getF( q )
-											)
-										)
-									);
+						if ( a == EPS ) continue;
+						for ( var b in states[q][E][r][a] ) {
+							if ( b == EPS ) continue;
+							this.setE( 
+								p, r, a, b, 
+								s.aProduct( 
+									epsClosure[p][q], 
+									this.getE( q, r, a, b ) 
+								)
+							);
+							this.setF(
+								p,
+								s.aSum(
+									( p != q ?  this.getF( p ) : s.a0 ),
+									s.aProduct(
+										epsClosure[p][q],
+										this.getF( q )
+									)
+								)
+							);
 /*
-									alert( 
-										"p: " + p + 
-										", target: " + q + 
-										", next: " + r + 
-										", E: " + getE( p, r, a, b ) +
-										", F(" + p + "): " + getF( p )
-									);
+							alert( 
+								"p: " + p + 
+								", tarthis.get: " + q + 
+								", next: " + r + 
+								", E: " + this.getE( p, r, a, b ) +
+								", F(" + p + "): " + this.getF( p )
+							);
 */
-								}
-							}
 						}
 					}
 				}
-				unsetE( p, q, EPS, EPS );
+				this.unsetE( p, q, EPS, EPS );
 			}
 		}
 	}
@@ -347,19 +344,53 @@ function FSM( )
 		document.write( "<img src='fsm.gif.php?code=" + code + "'>" );	
 		document.write( '<br>' );	
 	}
+
 }
 
+function exampleWeightedEpsClosure( fsm )
+{
+	fsm.setE( 0, 1, 0, 0, 0.25 );
+	fsm.setE( 0, 1, EPS, EPS, 0.5 );
+	fsm.setE( 1, 1, EPS, EPS, 0.2 );
+	fsm.setE( 1, 0, 1, 1, 0.5 );
+	fsm.setI( 1, 1 );
+	fsm.setF( 1, 0.3 );
+	fsm.setF( 0, 0.25 );
+}
+
+function exampleSimple( fsm )
+{
+	fsm.setE( 0, 1, 0 );
+	fsm.setE( 0, 2, 1 );
+	fsm.setI( 0 );
+	fsm.setF( 1, 0.5 );
+	fsm.setF( 2, 0.4 );
+}
+
+/*
+	this.setE( 0, 1, EPS , EPS, 0.4 );
+	this.setE( 1, 0, EPS , EPS, 0.5 );
+*/
+	/*
+	//this.setE( 4, 3, EPS , EPS, 2);
+	//this.setE( 3, 5, EPS , EPS, 3);
+	//this.setE( 0, 0, EPS , EPS, 1/5);
+
+*/
+	
 
 fsm1 = new FSM();
+//exampleWeightedEpsClosure( fsm1 );
+exampleSimple( fsm1 );
 //alert( dump( fsm1.epsClosure(0) ) );
 //alert( dump( fsm1.epsClosure(1) ) );
 fsm1.print();
-fsm1.plus();
+fsm1.starClosure();
 fsm1.print();
 
 fsm1.removeEpsilon();
 fsm1.print();
-//fsm1.star();
+//fsm1.starClosure();
 //fsm1.print();
 
 function dump( obj )
