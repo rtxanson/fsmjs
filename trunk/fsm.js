@@ -5,39 +5,34 @@ const EPS = -1;
 
 var tropicalSR = {
 	// a = abstract
-	aSum: function( w1, w2 ) 
-		{
-			return Math.min(w1, w2);
-		},
-	aProduct: function( w1, w2 ) 
-		{
-			return w1 + w2;
-		},
-	a0: 100,
+	aSum: function( w1, w2 ) {
+		if ( w1 == this.a0 ) return w2;
+		if ( w2 == this.a0 ) return w1;
+		return Math.min(w1, w2);
+	},
+	aProduct: function( w1, w2 ) {
+		if ( ( w1 == this.a0 ) || ( w2 == this.a0 ) ) return this.a0;
+		return w1 + w2;
+	},
+	a0: "+inf",
 	a1: 0,
-	aProductClosure: function ( w ) 
-	{
+	aProductClosure: function ( w ) {
 		return this.a0;
 	}
 }
 
 var realSR = {
 	// a = abstract
-	aSum: function( w1, w2 ) 
-		{
-			return w1 + w2;
-		},
-	aProduct: function( w1, w2 ) 
-		{
-			return w1 * w2;
-		},
+	aSum: function( w1, w2 ) {
+		return w1 + w2;
+	},
+	aProduct: function( w1, w2 ) {
+		return w1 * w2;
+	},
 	a0: 0,
 	a1: 1,
-	aProductClosure: function ( w ) 
-	{
-		if ( w >= 1 ) {
-			return undefined;
-		}
+	aProductClosure: function ( w ) {
+		if ( w >= 1 ) return undefined;
 		return 1 / ( 1 - w );
 	}
 }
@@ -429,6 +424,8 @@ function exampleClosureTropical()
 	fsm.print();
 	fsm.starClosure();
 	fsm.print();
+	fsm.removeEpsilon();
+	fsm.print();
 }
 
 /*
@@ -444,10 +441,10 @@ function exampleClosureTropical()
 	
 
 //exampleEpsRemoval();
-exampleSimple();
+//exampleSimple();
 
 //exampleClosure();
-//exampleClosureTropical();
+exampleClosureTropical();
 
 //alert( dump( fsm1.epsClosure(0) ) );
 //alert( dump( fsm1.epsClosure(1) ) );
