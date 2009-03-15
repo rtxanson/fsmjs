@@ -32,7 +32,8 @@ var realSR = {
 	a0: 0,
 	a1: 1,
 	aProductClosure: function ( w ) {
-		if ( w >= 1 ) return undefined;
+		if ( w > 1 ) return undefined;
+		if ( w == 1 ) return 1;
 		return 1 / ( 1 - w );
 	}
 }
@@ -58,16 +59,31 @@ function FSM( )
  *
  */
 
+	var fsm = this;
+
 	var Q = [];
+	fsm.Q = Q;
 
 	const E = 0;	// transitions
 	const F = 1;	// final w
 	const I = 2;	// initial w
 
+/* example: 
+ * state 1 with final weight 0.8 
+ * and outgoing transition 
+ * 	to state 2 
+ * 	with input symbol 3 
+ * 	and output symbol 4
+ * 	and transitions weight 0.5
+ * will look like
+ *
+ * Q[1][E][2][3][4] = 0.5
+ * Q[1][F] = 0.8
+ */
+
 	var sr = realSR;
-	var fsm = this;
 	
-	this.setSR = function( semiring )
+	fsm.setSR = function( semiring )
 	{
 		sr = semiring;
 	}
@@ -86,35 +102,51 @@ function FSM( )
 
 	// fsm helpers  --------------------------------------------------------------------
 
-	function ensureState( state )
+	function ensureQ( q )
 	{
-		if (! Q[state] ) {
-			createState( state );
+		if (! Q[q] ) {
+			setQ( q );
 		}
 	}
 
-	function createState( state )
+	function setQ( q )
 	{
-		Q[state] = [];
-		Q[state][E] = {};
-		Q[state][F] = sr.a0;
-		Q[state][I] = sr.a0;
+		Q[q] = [];
+		Q[q][E] = {};
+		Q[q][F] = sr.a0;
+		Q[q][I] = sr.a0;
 	}
 
-	this.setE = function( p, q, a, b, w ) 
+	fsm.setE = function( p, q, a, b, w ) 
 	{
-		if (! b ) b = a;
-		if (! w ) w = sr.a1;
+		if ( b == undefined ) b = a;
+		if ( w == undefined ) w = sr.a1;	// weight trivially
 
-		ensureState( p );
-		ensureState( q );
+		ensureQ( p );
+		ensureQ( q );
+
 		if (! Q[p][E][q] ) Q[p][E][q] = {}; 
 		if (! Q[p][E][q][a] ) Q[p][E][q][a] = {}; 
 		
+		//Q[p][E][q][a][b] = w;
+		//return;
+
+		// if E already exists: add new weight to old weight
 		Q[p][E][q][a][b] = w;
+		return;
+
+		//alert(w);
+		//alert( fsm.getE( p, q, a, b ) + " + " + w );
+		Q[p][E][q][a][b] = sr.aSum( 
+			fsm.getE( p, q, a, b ),
+			//Q[p][E][q][a][b],
+			w
+		);
+
+		alert("p = " + p + ", q = " + q + ", w = " + Q[p][E][q][a][b] );
 	}
 
-	this.isE = function( p, q, a, b ) 
+	fsm.isE = function( p, q, a, b ) 
 	{
 		return (
 			( Q[p][E][q] != undefined ) &&
@@ -123,9 +155,9 @@ function FSM( )
 		);
 	}
 	
-	this.unsetE = function( p, q, a, b ) 
+	fsm.unsetE = function( p, q, a, b ) 
 	{
-		if (! this.isE( p, q, a, b ) ) return;
+		if (! fsm.isE( p, q, a, b ) ) return;
 		delete Q[p][E][q][a][b];
 		/*
 		if ( a == undefined ) {
@@ -140,109 +172,227 @@ function FSM( )
 		*/
 	}
 
-	this.getE = function( p, q, a, b ) 
+	fsm.getE = function( p, q, a, b ) 
 	{
 		/*
 		if ( q == undefined ) return Q[p][E]; 
 		if ( a == undefined ) return Q[p][E][q]; 
 		if ( b == undefined ) return Q[p][E][q][a];
 		*/
-		if (! this.isE( p, q, a, b ) ) return sr.a0;
+		if (! fsm.isE( p, q, a, b ) ) {
+			if (
+				( p == q ) &&
+				( a == EPS ) &&
+				( b == EPS )
+			) {
+				return sr.a1;
+			} else {
+				return sr.a0;
+			}
+		}
 		return Q[p][E][q][a][b];
 	}
 
-	this.setI = function( state, w ) 
+	fsm.setI = function( q, w ) 
 	{
 		if ( w == undefined ) w = sr.a1;
-		ensureState( state );
-		Q[state][I] = w;
+		ensureQ( q );
+		Q[q][I] = w;
 	}
 
-	this.unsetI = function( state ) 
+	fsm.unsetI = function( q ) 
 	{
-		ensureState( state );
-		Q[state][I] = sr.a0;
+		ensureQ( q );
+		Q[q][I] = sr.a0;
 	}
-
-	this.getI = function( state ) 
+	fsm.getI = function( q ) 
 	{
-		ensureState( state );
-		return Q[state][I];
+		ensureQ( q );
+		return Q[q][I];
+	}
+	fsm.isI = function( q ) 
+	{
+		return ( Q[q][I] != sr.a0 );
 	}
 
-	this.setF = function( state, w ) 
+
+	fsm.setF = function( q, w ) 
 	{
 		if ( w == undefined ) w = sr.a1;
-		ensureState( state );
-		Q[state][F] = w;
+		ensureQ( q );
+		Q[q][F] = w;
 	}
-
-	this.getF = function( state ) 
+	fsm.unsetF = function( q ) 
 	{
-		ensureState( state );
-		return Q[state][F];
+		ensureQ( q );
+		Q[q][F] = sr.a0;
+	}
+	fsm.getF = function( q ) 
+	{
+		ensureQ( q );
+		return Q[q][F];
+	}
+	fsm.isF = function( q ) 
+	{
+		return ( Q[q][F] != sr.a0 );
 	}
 
-	this.isI = function( state ) {
-		return ( Q[state][I] != sr.a0 );
-	}
-
-	this.isF = function( state ) {
-		return ( Q[state][F] != sr.a0 );
-	}
 
 	// operations  --------------------------------------------------------------------
 
-	this.plusClosure = function()
+	fsm.union = function( fsm2 )
 	{
-		for ( var finalState in Q ) {
-			if ( this.isF( finalState ) ) {
-				for ( var initialState in Q ) {
-					if ( this.isI( initialState ) ) {
-						this.setE( finalState, initialState, EPS, EPS, this.getF(finalState) );
+		var q0 = fsm.swapStartState();
+		fsm2.transpose( Q.length );
+		Q = Q.concat( fsm2.Q );
+		// connect fsm2 start states with q0
+		for ( var q in Q ) {
+			if ( q <= q0 ) continue;
+			if (! fsm.isI( q ) ) continue;
+			fsm.setE( q0, q, EPS );
+			fsm.unsetI( q );
+		}
+	}
+
+	fsm.concat = function( fsm2 )
+	{
+		var fsm1Length = Q.length;
+		fsm2.transpose( Q.length );
+		Q = Q.concat( fsm2.Q );
+		//alert(dump(Q));
+
+		// remember all fsm2 start states
+		fsm2I = {};
+		for ( var q in Q ) {
+			if ( q < fsm1Length ) continue;
+			if (! fsm.isI( q ) ) continue;
+			fsm2I[q] = fsm.getI( q );
+		}
+
+		// connect fsm1 final states with fsm2 start states
+		for ( var p in Q ) {
+			if ( p >= fsm1Length ) continue;
+			if (! fsm.isF( p ) ) continue;
+			for ( var q in fsm2I ) {
+				fsm.setE( 
+					p, q, EPS, EPS, 
+					sr.aProduct(
+						fsm.getF( p ),
+						fsm2I[q]
+					)
+				);
+			}
+			fsm.unsetF( p );
+		}
+
+		// unset fsm2 start states
+		for ( var q in fsm2I ) {
+			fsm.unsetI( q );
+		}
+	}
+
+	fsm.transpose = function( offset )
+	{
+		for ( var p in Q ) {
+				var E2 = {};
+				for ( var q in Q[p][E] ) {
+					E2[parseInt(q) + parseInt(offset)] = Q[p][E][q];
+				}
+				Q[p][E] = E2;
+		}
+	}
+
+	fsm.plusClosure = function()
+	{
+		for ( var p in Q ) {
+			if ( fsm.isF( p ) ) {
+				for ( var q in Q ) {
+					if ( fsm.isI( q ) ) {
+						fsm.setE( p, q, EPS, EPS, fsm.getF( p ) );
 					}
 				}
 			}
 		}
 	}
 
-	this.starClosure = function()
+	fsm.starClosure = function()
 	{
-		this.plusClosure();
-		var newState = Q.length;
-		createState( newState );
-		for ( var initialState in Q ) {
-			if ( this.isI( initialState ) ) {
-				this.setE( newState, initialState, EPS );
-				this.unsetI( initialState );
-			}
-		}
-		this.setI( newState );
-		this.setF( newState );
+		fsm.plusClosure();
+		var newStartState = fsm.swapStartState();
+		fsm.setF( newStartState );
 	}
 
+	fsm.swapStartState = function()
+	{
+		var newStartState = Q.length;
+		setQ( newStartState );
+		for ( var q in Q ) {
+			if ( fsm.isI( q ) ) {
+				fsm.setE( newStartState, q, EPS );
+				fsm.unsetI( q );
+			}
+		}
+		fsm.setI( newStartState );
+		return newStartState;
+	}
 
-	this.epsClosure = function( state, wToState, epsClosure )
+	fsm.distance = function()
+	{
+		var d = [];
+		for ( var i in Q ) {
+			d[i] = [];
+			for ( var j in Q ) {
+				d[i][j] = fsm.getE( i, j, EPS, EPS );
+			}
+		}
+		//alert(dump(d));
+		for ( var k in Q ) {
+			var nextd = [];
+			for ( var i in Q ) {
+				nextd[i] = [];
+				for ( var j in Q ) {
+					//alert(i + " -> " + j + " = " + d[i][j] );
+					nextd[i][j] = sr.aSum( 
+						d[i][j],
+						sr.aProduct(
+							d[i][k],
+							sr.aProduct(
+								sr.aProductClosure( d[k][k] ),
+								d[k][j]
+							)
+						)
+					);
+					alert(i + " -> " + k + " -> " + j + " : " + d[i][j] + " + " + d[i][k] + " * " + d[k][k] + " * " + d[k][j] + " = " + nextd[i][j] );
+					//alert(k + ", " + d[k][k] + ", " + sr.aProductClosure( d[k][k] ) );
+					//alert( nextd[i][j] );
+				}
+			}
+			d = nextd;
+		}
+		alert(dump(d));
+	}
+
+	fsm.epsClosure = function( p, wToState, epsClosure )
 	{
 		if ( wToState == undefined ) var wToState = sr.a1;
 		if ( epsClosure == undefined ) var epsClosure = {};
-		//epsClosure[state] = sr.a0;
-		epsClosure[state] = wToState;
+		//epsClosure[p] = sr.a0;
+		epsClosure[p] = wToState;
 
-		for ( var q in Q[state][E] ) {
-			for ( var a in Q[state][E][q] ) {
+		for ( var q in Q[p][E] ) {
+			for ( var a in Q[p][E][q] ) {
 				if ( a != EPS ) continue;
-				for ( var b in Q[state][E][q][a] ) {
+				for ( var b in Q[p][E][q][a] ) {
 					if ( b != EPS ) continue;
 					// check if q already in closure
 					if (! epsClosure[q] ) {
 						epsClosure[q] = sr.aProduct(
 							wToState,
-							Q[state][E][q][a][b]
+							Q[p][E][q][a][b]
 						);
 						extendObject( 
 							epsClosure, 
-							this.epsClosure( q, epsClosure[q], epsClosure ) 
+							fsm.epsClosure( q, epsClosure[q], epsClosure ) 
 						);
 					} else {
 						epsClosure[q] = sr.aProduct(
@@ -250,7 +400,7 @@ function FSM( )
 							sr.aProductClosure(
 								sr.aProduct(
 									wToState/epsClosure[q],
-									Q[state][E][q][a][b]
+									Q[p][E][q][a][b]
 								)
 							)
 						);
@@ -261,11 +411,11 @@ function FSM( )
 		return epsClosure;
 	}
 
-	this.removeEpsilon = function()
+	fsm.removeEpsilon = function()
 	{
 		var epsClosure = [];
 		for ( p in Q ) {
-			epsClosure[p] = this.epsClosure( p ); 
+			epsClosure[p] = fsm.epsClosure( p ); 
 		}
 
 		for ( p in Q ) {
@@ -275,41 +425,43 @@ function FSM( )
 						if ( a == EPS ) continue;
 						for ( var b in Q[q][E][r][a] ) {
 							if ( b == EPS ) continue;
-							this.setE( 
+							fsm.setE( 
 								p, r, a, b, 
 								sr.aProduct( 
 									epsClosure[p][q], 
-									this.getE( q, r, a, b ) 
+									fsm.getE( q, r, a, b ) 
 								)
 							);
-							this.setF(
+							fsm.setF(
 								p,
 								sr.aSum(
-									( p != q ?  this.getF( p ) : sr.a0 ),
+									( p != q ?  fsm.getF( p ) : sr.a0 ),
 									sr.aProduct(
 										epsClosure[p][q],
-										this.getF( q )
+										fsm.getF( q )
 									)
 								)
 							);
 /*
 							alert( 
 								"p: " + p + 
-								", tarthis.get: " + q + 
+								", target: " + q + 
 								", next: " + r + 
-								", E: " + this.getE( p, r, a, b ) +
-								", F(" + p + "): " + this.getF( p )
+								", E: " + fsm.getE( p, r, a, b ) +
+								", F(" + p + "): " + fsm.getF( p )
 							);
 */
 						}
 					}
 				}
-				this.unsetE( p, q, EPS, EPS );
+				fsm.unsetE( p, q, EPS, EPS );
 			}
 		}
 	}
 
-	this.print = function()
+	
+
+	fsm.print = function()
 	{
 		var code = "digraph {\n" ;	
 		for ( var p in Q ) {
@@ -321,34 +473,28 @@ function FSM( )
 							" -> " + 
 							q + 
 							" [ label=\"" + 
-							symbols[a];
-
-						if ( a != b ) {
-							code += 
-								":" + 
-								symbols[b];
-						}
-						code += 
-							"/" + 
-							Q[p][E][q][a][b] + 
+							symbols[a] + 
+							( a != b ?  ":" + symbols[b] : "" ) +
+							( fsm.getE( p, q, a, b ) != sr.a1 ? "/" + fsm.getE( p, q, a, b ) : "" ) + 
 							"\" ] \n" ;
 					}
 				}
 			}
 		}
-		for ( var state in Q ) {
-			if ( this.isF( state ) ) {
-				code += state + " [ shape=\"doublecircle\" ]\n";	
+		for ( var q in Q ) {
+			if ( fsm.isF( q ) ) {
+				code += q + " [ shape=\"doublecircle\" ]\n";	
 			} else {
-				code += state + " [ shape=\"circle\" ]\n";	
+				code += q + " [ shape=\"circle\" ]\n";	
 			}
-			if ( this.isI( state ) ) {
-				code += state + " [ style=\"bold\" ]\n";
+			if ( fsm.isI( q ) ) {
+				code += q + " [ style=\"bold\" ]\n";
 			} 
-			code += state + 
-				" [ label=\"" + state + 
-				( fsm.isI( state ) ? "\\nI=" + fsm.getI( state ) : "" ) + 
-				( fsm.isF( state ) ? "\\nF=" + fsm.getF( state ) : "" ) + 
+			code += q + 
+				" [ label=\"" + q + 
+				// print weights only if not a0 or a1
+				( ( fsm.isI( q ) && fsm.getI( q ) != sr.a1 ) ? "\\nI=" + fsm.getI( q ) : "" ) + 
+				( ( fsm.isF( q ) && fsm.getF( q ) != sr.a1 ) ? "\\nF=" + fsm.getF( q ) : "" ) + 
 				"\" ]\n";	
 		}
 		code += "rankdir=LR\n" ;	
@@ -375,6 +521,8 @@ function exampleEpsRemoval()
 	fsm.setF( 0, 0.25 );
 
 	fsm.print();
+	//	fsm.distance();
+	//return;
 	fsm.removeEpsilon();
 	fsm.print();
 }
@@ -428,27 +576,63 @@ function exampleClosureTropical()
 	fsm.print();
 }
 
-/*
-	this.setE( 0, 1, EPS , EPS, 0.4 );
-	this.setE( 1, 0, EPS , EPS, 0.5 );
-*/
-	/*
-	//this.setE( 4, 3, EPS , EPS, 2);
-	//this.setE( 3, 5, EPS , EPS, 3);
-	//this.setE( 0, 0, EPS , EPS, 1/5);
+function exampleUnion()
+{
+	fsm1 = new FSM();
+	fsm1.setE( 0, 1, 0 );
+	fsm1.setE( 0, 2, 1 );
+	fsm1.setI( 0 );
+	fsm1.setF( 1 );
+	fsm1.setF( 2 );
 
-*/
-	
+	fsm1.print();
+
+	fsm2 = new FSM();
+	fsm2.setE( 0, 1, 2 );
+	fsm2.setI( 0 );
+	fsm2.setF( 1 );
+
+	fsm2.print();
+
+	fsm1.union( fsm2 );
+	fsm1.print();
+}
+
+function exampleConcat()
+{
+	fsm1 = new FSM();
+	fsm1.setE( 0, 1, 0 );
+	fsm1.setE( 0, 2, 1 );
+	fsm1.setI( 0 );
+	fsm1.setF( 1 );
+	fsm1.setF( 2, 0.8 );
+
+	fsm1.print();
+
+	fsm2 = new FSM();
+	fsm2.setE( 0, 1, 2 );
+	fsm2.setI( 0, 0.5 );
+	fsm2.setF( 1 );
+
+	fsm2.print();
+
+	fsm1.concat( fsm2 );
+	fsm1.print();
+}
+
+//exampleUnion();
+exampleConcat();
 
 //exampleEpsRemoval();
 //exampleSimple();
 
 //exampleClosure();
-exampleClosureTropical();
+//exampleClosureTropical();
 
 //alert( dump( fsm1.epsClosure(0) ) );
 //alert( dump( fsm1.epsClosure(1) ) );
 
+/*
 function dump( obj )
 {
 	var out = '';
@@ -456,4 +640,40 @@ function dump( obj )
 		out += attr + ': ' + obj[attr] + "\n";
 	}
 	return out;
+}
+*/
+/**
+ * Function : dump()
+ * Arguments: The data - array,hash(associative array),object
+ *    The level - OPTIONAL
+ * Returns  : The textual representation of the array.
+ * This function was inspired by the print_r function of PHP.
+ * This will accept some data as the argument and return a
+ * text that will be a more readable version of the
+ * array/hash/object that is given.
+ * Docs: http://www.openjs.com/scripts/others/dump_function_php_print_r.php
+ */
+function dump(arr,level) {
+	var dumped_text = "";
+	if(!level) level = 0;
+	
+	//The padding given at the beginning of the line.
+	var level_padding = "";
+	for(var j=0;j<level+1;j++) level_padding += "    ";
+	
+	if(typeof(arr) == 'object') { //Array/Hashes/Objects 
+		for(var item in arr) {
+			var value = arr[item];
+			
+			if(typeof(value) == 'object') { //If it is an array,
+				dumped_text += level_padding + "'" + item + "' ...\n";
+				dumped_text += dump(value,level+1);
+			} else {
+				dumped_text += level_padding + "'" + item + "' => \"" + value + "\"\n";
+			}
+		}
+	} else { //Stings/Chars/Numbers etc.
+		dumped_text = "===>"+arr+"<===("+typeof(arr)+")";
+	}
+	return dumped_text;
 }
