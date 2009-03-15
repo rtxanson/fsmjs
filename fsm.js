@@ -128,9 +128,6 @@ function FSM( )
 		if (! Q[p][E][q] ) Q[p][E][q] = {}; 
 		if (! Q[p][E][q][a] ) Q[p][E][q][a] = {}; 
 		
-		//Q[p][E][q][a][b] = w;
-		//return;
-
 		// if E already exists: add new weight to old weight
 		Q[p][E][q][a][b] = w;
 		return;
@@ -237,34 +234,61 @@ function FSM( )
 		return ( Q[q][F] != sr.a0 );
 	}
 
-
-	// operations  --------------------------------------------------------------------
-
-	fsm.union = function( fsm2 )
+	// increase all state indicies in Q[][E] by offset
+	fsm.transposeE = function( p, offset )
 	{
-		var q0 = fsm.swapStartState();
-		fsm2.transpose( Q.length );
-		Q = Q.concat( fsm2.Q );
-		// connect fsm2 start states with q0
+			var E2 = {};
+			for ( var q in Q[p][E] ) {
+				E2[parseInt( q ) + parseInt( offset )] = Q[p][E][q];
+			}
+			Q[p][E] = E2;
+	}
+
+	// create a new start state
+	// connect it with all other ones
+	// unset them
+	fsm.swapI = function()
+	{
+		var q0 = Q.length;
+		setQ( q0 );
 		for ( var q in Q ) {
+			if (! fsm.isI( q ) ) continue;
+			fsm.setE( q0, q, EPS );
+			fsm.unsetI( q );
+		}
+		fsm.setI( q0 );
+		return q0;
+	}
+
+
+	// binary operations  --------------------------------------------------------------------
+
+	fsm.union = function( fsm2 )	// destroys fsm2
+	{
+		var q0 = fsm.swapI();
+		Q = Q.concat( fsm2.Q );
+
+		for ( var q in Q ) {
+			// transpose former fsm2 E targets
 			if ( q <= q0 ) continue;
+			fsm.transposeE( q, q0 + 1 );
+			// connect q0 with fsm2 initial states
 			if (! fsm.isI( q ) ) continue;
 			fsm.setE( q0, q, EPS );
 			fsm.unsetI( q );
 		}
 	}
 
-	fsm.concat = function( fsm2 )
+	fsm.concat = function( fsm2 )	// destroys fsm2
 	{
 		var fsm1Length = Q.length;
-		fsm2.transpose( Q.length );
 		Q = Q.concat( fsm2.Q );
-		//alert(dump(Q));
 
-		// remember all fsm2 start states
 		fsm2I = {};
 		for ( var q in Q ) {
 			if ( q < fsm1Length ) continue;
+			fsm.transposeE( q, fsm1Length );
+			// remember all fsm2 start states
 			if (! fsm.isI( q ) ) continue;
 			fsm2I[q] = fsm.getI( q );
 		}
@@ -291,16 +315,50 @@ function FSM( )
 		}
 	}
 
-	fsm.transpose = function( offset )
+	fsm.intersect = function( fsm1, fsm2 )
 	{
-		for ( var p in Q ) {
-				var E2 = {};
-				for ( var q in Q[p][E] ) {
-					E2[parseInt(q) + parseInt(offset)] = Q[p][E][q];
+		for ( var p1 in fsm1.Q ) {
+			for ( var p2 in fsm2.Q ) {
+				var p3 = p1 * fsm2.Q.length + parseInt( p2 );
+				if ( fsm1.isI( p1 ) && fsm2.isI( p2 ) ) {
+					fsm.setI(
+						p3,
+						sr.aProduct(
+							fsm1.getI( p1 ),
+							fsm2.getI( p2 )
+						)
+					);
 				}
-				Q[p][E] = E2;
+				if ( fsm1.isF( p1 ) && fsm2.isF( p2 ) ) {
+					fsm.setF(
+						p3,
+						sr.aProduct(
+							fsm1.getF( p1 ),
+							fsm2.getF( p2 )
+						)
+					);
+				}
+				for ( var q1 in fsm1.Q[p1][E] ) {
+					for ( var q2 in fsm1.Q[p2][E] ) {
+						var q3 = q1 * fsm2.Q.length + parseInt( q2 );
+						for ( var a in fsm1.Q[p1][E][q1] ) {
+							for ( var b in fsm1.Q[p1][E][q1][a] ) {
+								if (! fsm2.isE( p2, q2, a, b ) ) continue;
+								fsm.setE( 
+									p3, q3, a, b,
+									sr.aProduct(
+										fsm1.getE( p1, q1, a, b ),
+										fsm2.getE( p2, q2, a, b )
+									)
+								);
+							}
+						}
+					}
+				}
+			}
 		}
 	}
+	// unary operations  --------------------------------------------------------------------
 
 	fsm.plusClosure = function()
 	{
@@ -318,22 +376,8 @@ function FSM( )
 	fsm.starClosure = function()
 	{
 		fsm.plusClosure();
-		var newStartState = fsm.swapStartState();
-		fsm.setF( newStartState );
-	}
-
-	fsm.swapStartState = function()
-	{
-		var newStartState = Q.length;
-		setQ( newStartState );
-		for ( var q in Q ) {
-			if ( fsm.isI( q ) ) {
-				fsm.setE( newStartState, q, EPS );
-				fsm.unsetI( q );
-			}
-		}
-		fsm.setI( newStartState );
-		return newStartState;
+		var q0 = fsm.swapI();
+		fsm.setF( q0 );
 	}
 
 	fsm.distance = function()
@@ -371,6 +415,8 @@ function FSM( )
 		}
 		alert(dump(d));
 	}
+
+	// equivalence operations  --------------------------------------------------------------------
 
 	fsm.epsClosure = function( p, wToState, epsClosure )
 	{
@@ -620,8 +666,32 @@ function exampleConcat()
 	fsm1.print();
 }
 
+function exampleIntersect()
+{
+	fsm1 = new FSM();
+	fsm1.setE( 0, 1, 0 );
+	fsm1.setE( 0, 2, 1, 1, 0.5 );
+	fsm1.setI( 0 );
+	fsm1.setF( 1 );
+	fsm1.setF( 2, 0.8 );
+
+	fsm1.print();
+
+	fsm2 = new FSM();
+	fsm2.setE( 0, 1, 1, 1, 0.6 );
+	fsm2.setI( 0, 0.5 );
+	fsm2.setF( 1, 0.5 );
+
+	fsm2.print();
+
+	fsm3 = new FSM();
+	fsm3.intersect( fsm1, fsm2 );
+	fsm3.print();
+}
+
 //exampleUnion();
-exampleConcat();
+//exampleConcat();
+exampleIntersect();
 
 //exampleEpsRemoval();
 //exampleSimple();
