@@ -24,17 +24,20 @@ var tropicalSR = {
 var realSR = {
 	// a = abstract
 	aSum: function( w1, w2 ) {
+		if ( w1 == "+inf" || w2 == "+inf" ) return "+inf";
 		return w1 + w2;
 	},
 	aProduct: function( w1, w2 ) {
+		if ( w1 == this.a0 || w2 == this.a0 ) return this.a0;
+		if ( w1 == "+inf" || w2 == "+inf" ) return "+inf";
 		return w1 * w2;
 	},
 	a0: 0,
 	a1: 1,
 	aProductClosure: function ( w ) {
-		if ( w > 1 ) return undefined;
+		if ( w > 1 ) return "+inf";
 		if ( w == 1 ) return 1;
-		return 1 / ( 1 - w );
+		return 1 / ( 1 - w ) ;
 	}
 }
 
@@ -45,8 +48,9 @@ function FSM( )
  *
  * Q = states
  * E = transitions
- * F = final weights
- * I = initial weights
+ * F = final weight
+ * I = initial weight
+ * N = name (optional)
  *
  * p = source state
  * q = target state
@@ -54,8 +58,9 @@ function FSM( )
  *
  * a = input symbol
  * b = output symbol
+ * w = weight
  *
- * s = semiring
+ * sr = semiring
  *
  */
 
@@ -65,8 +70,9 @@ function FSM( )
 	fsm.Q = Q;
 
 	const E = 0;	// transitions
-	const F = 1;	// final w
-	const I = 2;	// initial w
+	const F = 1;	// final weight
+	const I = 2;	// initial weight
+	const N = 3;	// name
 
 /* example: 
  * state 1 with final weight 0.8 
@@ -88,11 +94,12 @@ function FSM( )
 		sr = semiring;
 	}
 
-
-
+	fsm.isFSA = true;
 
 	// general helpers  --------------------------------------------------------------------
 
+	// extends obj1 with obj2
+	// returns void
 	function extendObject( obj1, obj2 )
 	{
 		for (attrname in obj2) { 
@@ -102,14 +109,46 @@ function FSM( )
 
 	// fsm helpers  --------------------------------------------------------------------
 
-	function ensureQ( q )
+	// calculates index for a new q
+	// as "cross-product" out of q1 and q2
+	// returns q
+	fsm.pairQ = function( q1, q2, q2Length )
+	{
+		var q = q1 * q2Length + parseInt( q2 );
+		fsm.setN( q, q1 + "," + q2 );
+		return q;
+	}
+
+	// gets name of q
+	// returns n
+	fsm.getN = function( q )
+	{
+		fsm.ensureQ( q );
+		if ( Q[q][N] == undefined ) return q;
+		return Q[q][N];
+	}
+
+	// sets name of w with n
+	// returns void
+	fsm.setN = function( q, n )
+	{
+		fsm.ensureQ( q );
+		Q[q][N] = n;
+	}
+
+	// checks if q exists
+	// if not: creates q
+	// returns void
+	fsm.ensureQ = function ( q )
 	{
 		if (! Q[q] ) {
-			setQ( q );
+			fsm.setQ( q );
 		}
 	}
 
-	function setQ( q )
+	// sets q
+	// returns void
+	fsm.setQ = function ( q )
 	{
 		Q[q] = [];
 		Q[q][E] = {};
@@ -117,34 +156,76 @@ function FSM( )
 		Q[q][I] = sr.a0;
 	}
 
+	// deletes all undefined states in Q array
+	// returns void
+	fsm.shrinkQ = function()
+	{
+		var count = 0;
+		var newIndices = {};
+		for ( var q in Q ) {
+			if ( Q[q] != undefined ) {
+				newIndices[q] = count;
+				count++
+			}
+		}
+		q = 0;
+		while ( q < Q.length ) {
+			if ( Q[q] == undefined ) {
+				Q.splice(q, 1);
+			} else {
+				fsm.adjustE( q, newIndices );
+				q++;
+			}
+		}
+	}
+
+	// sets transition between p and q with a:b and weight w
+	// returns void
 	fsm.setE = function( p, q, a, b, w ) 
 	{
-		if ( b == undefined ) b = a;
-		if ( w == undefined ) w = sr.a1;	// weight trivially
+		if ( w == sr.a0 ) {
+			fsm.unsetE( p, q, a, b, w );
+			return;
+		}
 
-		ensureQ( p );
-		ensureQ( q );
+		if ( w == undefined ) w = sr.a1;	// weight trivially
+		if ( b == undefined ) b = a;
+
+		if ( a != b ) fsm.isFSA = false;
+
+		fsm.ensureQ( p );
+		fsm.ensureQ( q );
 
 		if (! Q[p][E][q] ) Q[p][E][q] = {}; 
 		if (! Q[p][E][q][a] ) Q[p][E][q][a] = {}; 
 		
-		// if E already exists: add new weight to old weight
-		Q[p][E][q][a][b] = w;
-		return;
-
-		//alert(w);
-		//alert( fsm.getE( p, q, a, b ) + " + " + w );
 		Q[p][E][q][a][b] = sr.aSum( 
 			fsm.getE( p, q, a, b ),
-			//Q[p][E][q][a][b],
 			w
 		);
-
-		alert("p = " + p + ", q = " + q + ", w = " + Q[p][E][q][a][b] );
 	}
 
+	// checks if p has outgoing transition with a:b
+	// returns bool
+	fsm.hasE = function( p, a, b ) 
+	{
+		if ( b == undefined ) b = a;
+		for ( q in Q[p][E] ) {
+			for ( ai in Q[p][E][q] ) {
+				if ( ai != a ) continue;
+				for ( bi in Q[p][E][q][ai] ) {
+					if ( bi == b ) return true;
+				}
+			}
+		}
+		return false;
+	}
+	
+	// checks if transition exists
+	// returns bool
 	fsm.isE = function( p, q, a, b ) 
 	{
+		if ( b == undefined ) b = a;
 		return (
 			( Q[p][E][q] != undefined ) &&
 			( Q[p][E][q][a] != undefined ) &&
@@ -152,89 +233,100 @@ function FSM( )
 		);
 	}
 	
+	// deletes transition
+	// returns void
 	fsm.unsetE = function( p, q, a, b ) 
 	{
 		if (! fsm.isE( p, q, a, b ) ) return;
 		delete Q[p][E][q][a][b];
-		/*
-		if ( a == undefined ) {
-			delete Q[p][E][q];
-			return;
-		}
-		if ( b == undefined ) {
-			delete Q[p][E][q][a];
-			return;
-		}
-		delete Q[p][E][q][a][b];
-		*/
 	}
 
+	// gets weight of transition
+	// returns w
 	fsm.getE = function( p, q, a, b ) 
 	{
-		/*
-		if ( q == undefined ) return Q[p][E]; 
-		if ( a == undefined ) return Q[p][E][q]; 
-		if ( b == undefined ) return Q[p][E][q][a];
-		*/
-		if (! fsm.isE( p, q, a, b ) ) {
-			if (
-				( p == q ) &&
-				( a == EPS ) &&
-				( b == EPS )
-			) {
-				return sr.a1;
-			} else {
-				return sr.a0;
-			}
-		}
+		if ( b == undefined ) b = a;
+		if (! fsm.isE( p, q, a, b ) ) return sr.a0;
 		return Q[p][E][q][a][b];
 	}
 
+	// sets initial weight to w
+	// returns void
 	fsm.setI = function( q, w ) 
 	{
 		if ( w == undefined ) w = sr.a1;
-		ensureQ( q );
+		fsm.ensureQ( q );
 		Q[q][I] = w;
 	}
 
+	// sets initial weight to a0
+	// returns void
 	fsm.unsetI = function( q ) 
 	{
-		ensureQ( q );
+		fsm.ensureQ( q );
 		Q[q][I] = sr.a0;
 	}
+
+	// gets initial weight
+	// returns w
 	fsm.getI = function( q ) 
 	{
-		ensureQ( q );
+		fsm.ensureQ( q );
 		return Q[q][I];
 	}
+
+	// checks if q is an initial state
+	// returns bool
 	fsm.isI = function( q ) 
 	{
 		return ( Q[q][I] != sr.a0 );
 	}
 
-
+	// sets final weight to w
+	// returns void
 	fsm.setF = function( q, w ) 
 	{
 		if ( w == undefined ) w = sr.a1;
-		ensureQ( q );
+		fsm.ensureQ( q );
 		Q[q][F] = w;
 	}
+
+	// sets final weight to a0
+	// returns void
 	fsm.unsetF = function( q ) 
 	{
-		ensureQ( q );
+		fsm.ensureQ( q );
 		Q[q][F] = sr.a0;
 	}
+
+	// gets final weight
+	// returns w
 	fsm.getF = function( q ) 
 	{
-		ensureQ( q );
+		fsm.ensureQ( q );
 		return Q[q][F];
 	}
+
+	// checks if q is a final state
+	// returns bool
 	fsm.isF = function( q ) 
 	{
 		return ( Q[q][F] != sr.a0 );
 	}
 
+	// map all state indicies in Q[][E] to new ones
+	// returns void
+	fsm.adjustE = function( p, newIndices )
+	{
+			var E2 = {};
+			for ( var q in Q[p][E] ) {
+				E2[newIndices[q]] = Q[p][E][q];
+			}
+			Q[p][E] = E2;
+	}
+
 	// increase all state indicies in Q[][E] by offset
+	// returns void
 	fsm.transposeE = function( p, offset )
 	{
 			var E2 = {};
@@ -247,13 +339,14 @@ function FSM( )
 	// create a new start state
 	// connect it with all other ones
 	// unset them
+	// returns void
 	fsm.swapI = function()
 	{
 		var q0 = Q.length;
-		setQ( q0 );
+		fsm.setQ( q0 );
 		for ( var q in Q ) {
 			if (! fsm.isI( q ) ) continue;
-			fsm.setE( q0, q, EPS );
+			fsm.setE( q0, q, EPS, EPS, fsm.getI( q ) );
 			fsm.unsetI( q );
 		}
 		fsm.setI( q0 );
@@ -274,9 +367,10 @@ function FSM( )
 			fsm.transposeE( q, q0 + 1 );
 			// connect q0 with fsm2 initial states
 			if (! fsm.isI( q ) ) continue;
-			fsm.setE( q0, q, EPS );
+			fsm.setE( q0, q, EPS, EPS, fsm.getI( q ) );
 			fsm.unsetI( q );
 		}
+		fsm.isFSA = fsm.isFSA && fsm2.isFSA;
 	}
 
 	fsm.concat = function( fsm2 )	// destroys fsm2
@@ -313,39 +407,48 @@ function FSM( )
 		for ( var q in fsm2I ) {
 			fsm.unsetI( q );
 		}
+		fsm.isFSA = fsm.isFSA && fsm2.isFSA;
 	}
 
 	fsm.intersect = function( fsm1, fsm2 )
 	{
+		if (! fsm1.isFSA ) throw "fsm1 must be a FSA.";
+		if (! fsm2.isFSA ) throw "fsm2 must be a FSA.";
+
 		for ( var p1 in fsm1.Q ) {
 			for ( var p2 in fsm2.Q ) {
-				var p3 = p1 * fsm2.Q.length + parseInt( p2 );
-				if ( fsm1.isI( p1 ) && fsm2.isI( p2 ) ) {
-					fsm.setI(
-						p3,
-						sr.aProduct(
-							fsm1.getI( p1 ),
-							fsm2.getI( p2 )
-						)
-					);
+				var p = fsm.pairQ( p1, p2, fsm2.Q.length );
+				fsm.setI( p, sr.aProduct( fsm1.getI( p1 ), fsm2.getI( p2 ) ) );
+				fsm.setF( p, sr.aProduct( fsm1.getF( p1 ), fsm2.getF( p2 ) ) ); 
+				// epsilon transitions
+				if (! fsm2.hasE( p2, EPS ) ) { 
+					for ( var q1 in fsm1.Q[p1][E] ) {
+						if (! fsm1.isE( p1, q1, EPS ) ) continue;
+						var q = fsm.pairQ( p2, q1, fsm1.Q.length );
+						fsm.setE( 
+							p, q, EPS, EPS,
+							fsm1.getE( p1, q1, EPS )
+						);
+					}
 				}
-				if ( fsm1.isF( p1 ) && fsm2.isF( p2 ) ) {
-					fsm.setF(
-						p3,
-						sr.aProduct(
-							fsm1.getF( p1 ),
-							fsm2.getF( p2 )
-						)
-					);
+				if (! fsm1.hasE( p1, EPS ) ) { 
+					for ( var q2 in fsm2.Q[p2][E] ) {
+						if (! fsm2.isE( p2, q2, EPS ) ) continue;
+						var q = fsm.pairQ( p1, q2, fsm2.Q.length );
+						fsm.setE( 
+							p, q, EPS, EPS,
+							fsm2.getE( p2, q2, EPS )
+						);
+					}
 				}
 				for ( var q1 in fsm1.Q[p1][E] ) {
-					for ( var q2 in fsm1.Q[p2][E] ) {
-						var q3 = q1 * fsm2.Q.length + parseInt( q2 );
+					for ( var q2 in fsm2.Q[p2][E] ) {
 						for ( var a in fsm1.Q[p1][E][q1] ) {
 							for ( var b in fsm1.Q[p1][E][q1][a] ) {
 								if (! fsm2.isE( p2, q2, a, b ) ) continue;
+								var q = fsm.pairQ( q1, q2, fsm2.Q.length );
 								fsm.setE( 
-									p3, q3, a, b,
+									p, q, a, b,
 									sr.aProduct(
 										fsm1.getE( p1, q1, a, b ),
 										fsm2.getE( p2, q2, a, b )
@@ -386,17 +489,27 @@ function FSM( )
 		for ( var i in Q ) {
 			d[i] = [];
 			for ( var j in Q ) {
-				d[i][j] = fsm.getE( i, j, EPS, EPS );
+				if ( i != j ) {
+					d[i][j] = fsm.getE( i, j, EPS, EPS );
+				} else {
+					d[i][j] = sr.aProductClosure( fsm.getE( i, j, EPS, EPS ) );
+/*
+					d[i][j] = sr.aSum(
+						sr.a1,
+						sr.aProductClosure( fsm.getE( i, j, EPS, EPS ) )
+					);
+*/
+				}
 			}
 		}
-		//alert(dump(d));
+		alert(dump(d));
 		for ( var k in Q ) {
-			var nextd = [];
 			for ( var i in Q ) {
-				nextd[i] = [];
+				if ( i == k ) continue;
 				for ( var j in Q ) {
-					//alert(i + " -> " + j + " = " + d[i][j] );
-					nextd[i][j] = sr.aSum( 
+					if ( j == k ) continue;
+					alert( "1) " + i + " -> " + k + " -> " + j + " : " + d[i][j] + " + " + d[i][k] + " x " + d[k][k] + "* x " + d[k][j] );
+					d[i][j] = sr.aSum( 
 						d[i][j],
 						sr.aProduct(
 							d[i][k],
@@ -406,12 +519,28 @@ function FSM( )
 							)
 						)
 					);
-					alert(i + " -> " + k + " -> " + j + " : " + d[i][j] + " + " + d[i][k] + " * " + d[k][k] + " * " + d[k][j] + " = " + nextd[i][j] );
+					alert( d[i][j] );
+					//alert("1) " + i + " -> " + k + " -> " + j + " : " + d[i][j] );
 					//alert(k + ", " + d[k][k] + ", " + sr.aProductClosure( d[k][k] ) );
 					//alert( nextd[i][j] );
 				}
 			}
-			d = nextd;
+			for ( var i in Q ) {
+				if ( i == k ) continue;
+				alert( "2) " + k + " -> " + i + " : " + d[k][k] + "* x " + d[k][i] );
+				d[k][i] = sr.aProduct(
+					sr.aProductClosure( d[k][k] ),
+					d[k][i]
+				);
+				alert( d[k][i] );
+				alert( "3) " + i + " -> " + k + " : " + d[i][k] + " x " + d[k][k] + "*" );
+				d[i][k] = sr.aProduct(
+					d[i][k],
+					sr.aProductClosure( d[k][k] )
+				);
+				alert( d[i][k] );
+			}
+			//d[k][k] = sr.aProductClosure( d[k][k] )
 		}
 		alert(dump(d));
 	}
@@ -471,11 +600,15 @@ function FSM( )
 						if ( a == EPS ) continue;
 						for ( var b in Q[q][E][r][a] ) {
 							if ( b == EPS ) continue;
+							// remember old weight and delete it
+							// so it won't get added to new one
+							var w = fsm.getE( q, r, a, b );
+							fsm.unsetE( p, r, a, b );
 							fsm.setE( 
 								p, r, a, b, 
 								sr.aProduct( 
 									epsClosure[p][q], 
-									fsm.getE( q, r, a, b ) 
+									w
 								)
 							);
 							fsm.setF(
@@ -528,20 +661,21 @@ function FSM( )
 			}
 		}
 		for ( var q in Q ) {
-			if ( fsm.isF( q ) ) {
-				code += q + " [ shape=\"doublecircle\" ]\n";	
-			} else {
-				code += q + " [ shape=\"circle\" ]\n";	
-			}
-			if ( fsm.isI( q ) ) {
-				code += q + " [ style=\"bold\" ]\n";
-			} 
-			code += q + 
-				" [ label=\"" + q + 
-				// print weights only if not a0 or a1
-				( ( fsm.isI( q ) && fsm.getI( q ) != sr.a1 ) ? "\\nI=" + fsm.getI( q ) : "" ) + 
-				( ( fsm.isF( q ) && fsm.getF( q ) != sr.a1 ) ? "\\nF=" + fsm.getF( q ) : "" ) + 
-				"\" ]\n";	
+			code +=
+				q + 
+				" [ " +
+				"label=\"" +
+					fsm.getN( q ) +
+					"\n" +
+					// print weights only if not a0 or a1
+					( ( fsm.isI( q ) && fsm.getI( q ) != sr.a1 ) ? "\\nI=" + fsm.getI( q ) : "" ) + 
+					( ( fsm.isF( q ) && fsm.getF( q ) != sr.a1 ) ? "\\nF=" + fsm.getF( q ) : "" ) + 
+					"\" " + 
+				"shape=\"" +
+					( fsm.isF( q ) ? "doublecircle" : "circle" ) +
+					"\" " +
+				( fsm.isI( q ) ? "style=\"bold\"" : "" ) +
+				"]\n";
 		}
 		code += "rankdir=LR\n" ;	
 		code += "}" ;	
@@ -553,8 +687,28 @@ function FSM( )
 
 }
 
-function exampleEpsRemoval()
+runTests();
+
+//exampleUnion();
+//exampleConcat();
+exampleIntersect();
+//exampleIntersectEpsilon();
+
+//exampleRemoveEpsilon();
+//exampleSimple();
+
+//exampleClosure();
+//exampleClosureTropical();
+
+//alert( dump( fsm1.epsClosure(0) ) );
+//alert( dump( fsm1.epsClosure(1) ) );
+
+function runTests()
 {
+	var tests = [
+/*
+	function () { // RemoveEpsilon
+
 	fsm = new FSM();
 
 	fsm.setE( 0, 1, 0, 0, 0.25 );
@@ -566,8 +720,118 @@ function exampleEpsRemoval()
 	fsm.setF( 1, 0.3 );
 	fsm.setF( 0, 0.25 );
 
+	fsm.removeEpsilon();
+
+	return ( serialize(fsm) == 'a:1:{s:1:"Q";a:2:{i:0;a:3:{i:0;a:2:{i:1;a:2:{i:0;a:1:{i:0;d:0.25;}s:2:"-1";a:0:{}}i:0;a:1:{i:1;a:1:{i:1;d:0.3125;}}}i:1;d:0.4375;i:2;i:0;}i:1;a:3:{i:0;a:2:{i:1;a:1:{s:2:"-1";a:0:{}}i:0;a:1:{i:1;a:1:{i:1;d:0.625;}}}i:1;d:0.375;i:2;i:1;}}}' );
+
+	});
+*/
+	function () { // union
+
+	fsm1 = new FSM();
+	fsm1.setE( 0, 1, 0 );
+	fsm1.setE( 0, 2, 1 );
+	fsm1.setI( 0, 0.4 );
+	fsm1.setF( 1 );
+	fsm1.setF( 2 );
+
+	fsm2 = new FSM();
+	fsm2.setE( 0, 1, 2 );
+	fsm2.setI( 0, 0.6 );
+	fsm2.setF( 1 );
+
+	fsm1.union( fsm2 );
+
+	return ( serialize(fsm1) == 'a:2:{s:1:"Q";a:4:{i:0;a:3:{i:0;a:2:{i:1;a:1:{i:0;a:1:{i:0;i:1;}}i:2;a:1:{i:1;a:1:{i:1;i:1;}}}i:1;i:0;i:2;i:0;}i:1;a:3:{i:0;a:0:{}i:1;i:1;i:2;i:0;}i:2;a:3:{i:0;a:0:{}i:1;i:1;i:2;i:0;}i:3;a:3:{i:0;a:2:{i:0;a:1:{s:2:"-1";a:1:{s:2:"-1";d:0.4;}}i:4;a:1:{s:2:"-1";a:1:{s:2:"-1";d:0.6;}}}i:1;i:0;i:2;i:1;}}s:5:"isFSA";b:1;}' );
+	},
+
+	function () { // concat
+
+	fsm1 = new FSM();
+	fsm1.setE( 0, 1, 0 );
+	fsm1.setE( 0, 2, 1 );
+	fsm1.setI( 0 );
+	fsm1.setF( 1 );
+	fsm1.setF( 2, 0.8 );
+
+	fsm2 = new FSM();
+	fsm2.setE( 0, 1, 2 );
+	fsm2.setI( 0, 0.5 );
+	fsm2.setF( 1 );
+
+	fsm1.concat( fsm2 );
+
+	return ( serialize(fsm1) == 'a:2:{s:1:"Q";a:3:{i:0;a:3:{i:0;a:2:{i:1;a:1:{i:0;a:1:{i:0;i:1;}}i:2;a:1:{i:1;a:1:{i:1;i:1;}}}i:1;i:0;i:2;i:1;}i:1;a:3:{i:0;a:1:{i:3;a:1:{s:2:"-1";a:1:{s:2:"-1";d:0.5;}}}i:1;i:0;i:2;i:0;}i:2;a:3:{i:0;a:1:{i:3;a:1:{s:2:"-1";a:1:{s:2:"-1";d:0.4;}}}i:1;i:0;i:2;i:0;}}s:5:"isFSA";b:1;}' );
+
+	},
+
+	function () { // intersect
+
+	fsm1 = new FSM();
+	fsm1.setE( 0, 1, 0 );
+	fsm1.setE( 0, 2, 1, 1, 0.5 );
+	fsm1.setI( 0 );
+	fsm1.setF( 1 );
+	fsm1.setF( 2, 0.8 );
+
+	fsm2 = new FSM();
+	fsm2.setE( 0, 1, 1, 1, 0.6 );
+	fsm2.setI( 0, 0.5 );
+	fsm2.setF( 1, 0.5 );
+
+	fsm3 = new FSM();
+	fsm3.intersect( fsm1, fsm2 );
+
+	return ( serialize( fsm3 ) == 'a:2:{s:1:"Q";a:6:{i:0;a:4:{i:0;a:1:{i:5;a:1:{i:1;a:1:{i:1;d:0.3;}}}i:1;i:0;i:2;d:0.5;i:3;s:3:"0,0";}i:1;a:4:{i:0;a:0:{}i:1;i:0;i:2;i:0;i:3;s:3:"0,1";}i:2;a:4:{i:0;a:0:{}i:1;i:0;i:2;i:0;i:3;s:3:"1,0";}i:3;a:4:{i:0;a:0:{}i:1;d:0.5;i:2;i:0;i:3;s:3:"1,1";}i:4;a:4:{i:0;a:0:{}i:1;i:0;i:2;i:0;i:3;s:3:"2,0";}i:5;a:4:{i:0;a:0:{}i:1;d:0.4;i:2;i:0;i:3;s:3:"2,1";}}s:5:"isFSA";b:1;}' );
+
+	},
+
+	function () { // closure tropical
+
+	fsm = new FSM();
+	fsm.setSR( tropicalSR );
+
+	fsm.setI( 3 );
+	fsm.setE( 3, 0, 0 );
+	fsm.setE( 3, 1, 2 );
+	fsm.setE( 1, 2, 1 );
+	fsm.setE( 2, 1, 2, 2, 1 );
+
+	fsm.setI( 3 );
+	fsm.setF( 0, 2 );
+	fsm.setF( 2, 1 );
+
+	fsm.starClosure();
+
+	return ( serialize( fsm ) == 'a:2:{s:1:"Q";a:5:{i:0;a:3:{i:0;a:1:{i:3;a:1:{s:2:"-1";a:1:{s:2:"-1";i:2;}}}i:1;i:2;i:2;s:4:"+inf";}i:1;a:3:{i:0;a:1:{i:2;a:1:{i:1;a:1:{i:1;i:0;}}}i:1;s:4:"+inf";i:2;s:4:"+inf";}i:2;a:3:{i:0;a:2:{i:1;a:1:{i:2;a:1:{i:2;i:1;}}i:3;a:1:{s:2:"-1";a:1:{s:2:"-1";i:1;}}}i:1;i:1;i:2;s:4:"+inf";}i:3;a:3:{i:0;a:2:{i:0;a:1:{i:0;a:1:{i:0;i:0;}}i:1;a:1:{i:2;a:1:{i:2;i:0;}}}i:1;s:4:"+inf";i:2;s:4:"+inf";}i:4;a:3:{i:0;a:1:{i:3;a:1:{s:2:"-1";a:1:{s:2:"-1";i:0;}}}i:1;i:0;i:2;i:0;}}s:5:"isFSA";b:1;}' );
+
+	},
+
+	function(){ return true; } ]
+
+	for ( var i in tests ) {
+		if (! tests[i]() ) {
+			alert( "Test " + i + " failed." );
+		}
+	}
+}
+
+function exampleRemoveEpsilon()
+{
+	fsm = new FSM();
+
+	fsm.setE( 0, 1, 0, 0, 0.25 );
+	fsm.setE( 0, 1, EPS, EPS, 0.5 );
+	fsm.setE( 1, 1, EPS, EPS, 0.2 );
+	fsm.setE( 1, 0, 1, 1, 0.5 );
+
+	fsm.setI( 1 );
+	fsm.setF( 1, 0.3 );
+	fsm.setF( 0, 0.25 );
+
+	fsm.setF( 0 );
 	fsm.print();
-	//	fsm.distance();
+	//fsm.distance();
 	//return;
 	fsm.removeEpsilon();
 	fsm.print();
@@ -687,31 +951,36 @@ function exampleIntersect()
 	fsm3 = new FSM();
 	fsm3.intersect( fsm1, fsm2 );
 	fsm3.print();
+	fsm3.shrinkQ();
+	fsm3.print();
 }
 
-//exampleUnion();
-//exampleConcat();
-exampleIntersect();
-
-//exampleEpsRemoval();
-//exampleSimple();
-
-//exampleClosure();
-//exampleClosureTropical();
-
-//alert( dump( fsm1.epsClosure(0) ) );
-//alert( dump( fsm1.epsClosure(1) ) );
-
-/*
-function dump( obj )
+function exampleIntersectEpsilon()
 {
-	var out = '';
-	for ( var attr in obj ) {
-		out += attr + ': ' + obj[attr] + "\n";
-	}
-	return out;
+	fsm1 = new FSM();
+	fsm1.setE( 0, 1, 0 );
+	fsm1.setE( 1, 2, EPS, EPS, 0.8 );
+	fsm1.setI( 0 );
+	fsm1.setF( 2 );
+	//fsm1.setF( 1 );
+
+	fsm1.print();
+
+	fsm2 = new FSM();
+	fsm2.setE( 0, 1, EPS, EPS, 0.8 );
+	fsm2.setE( 1, 2, 0, 1 );
+	fsm2.setI( 0 );
+	fsm2.setF( 2 );
+
+	fsm2.print();
+
+	fsm3 = new FSM();
+	fsm3.intersect( fsm1, fsm2 );
+	fsm3.print();
+	//fsm3.shrinkQ();
+	//fsm3.print();
 }
-*/
+
 /**
  * Function : dump()
  * Arguments: The data - array,hash(associative array),object
@@ -746,4 +1015,103 @@ function dump(arr,level) {
 		dumped_text = "===>"+arr+"<===("+typeof(arr)+")";
 	}
 	return dumped_text;
+}
+
+
+function serialize( mixed_value ) {
+    // http://kevin.vanzonneveld.net
+    // +   original by: Arpad Ray (mailto:arpad@php.net)
+    // +   improved by: Dino
+    // +   bugfixed by: Andrej Pavlovic
+    // +   bugfixed by: Garagoth
+    // %          note: We feel the main purpose of this function should be to
+    // ease the transport of data between php & js
+    // %          note: Aiming for PHP-compatibility, we have to translate
+    // objects to arrays
+    // *     example 1: serialize(['Kevin', 'van', 'Zonneveld']);
+    // *     returns 1:
+    // 'a:3:{i:0;s:5:"Kevin";i:1;s:3:"van";i:2;s:9:"Zonneveld";}'
+    // *     example 2: serialize({firstName: 'Kevin', midName: 'van',
+    // surName: 'Zonneveld'});
+    // *     returns 2:
+    // 'a:3:{s:9:"firstName";s:5:"Kevin";s:7:"midName";s:3:"van";s:7:"surName";s:9:"Zonneveld";}'
+ 
+    var _getType = function( inp ) {
+        var type = typeof inp, match;
+        var key;
+        if (type == 'object' && !inp) {
+            return 'null';
+        }
+        if (type == "object") {
+            if (!inp.constructor) {
+                return 'object';
+            }
+            var cons = inp.constructor.toString();
+            if (match = cons.match(/(\w+)\(/)) {
+                cons = match[1].toLowerCase();
+            }
+            var types = ["boolean", "number", "string", "array"];
+            for (key in types) {
+                if (cons == types[key]) {
+                    type = types[key];
+                    break;
+                }
+            }
+        }
+        return type;
+    };
+    var type = _getType(mixed_value);
+    var val, ktype = '';
+    
+    switch (type) {
+        case "function": 
+            val = ""; 
+            break;
+        case "undefined":
+            val = "N";
+            break;
+        case "boolean":
+            val = "b:" + (mixed_value ? "1" : "0");
+            break;
+        case "number":
+            val = (Math.round(mixed_value) == mixed_value ? "i" : "d") + ":" +
+mixed_value;
+            break;
+        case "string":
+            val = "s:" + mixed_value.length + ":\"" + mixed_value + "\"";
+            break;
+        case "array":
+        case "object":
+            val = "a";
+            /*
+            if (type == "object") {
+                var objname =
+mixed_value.constructor.toString().match(/(\w+)\(\)/);
+                if (objname == undefined) {
+                    return;
+                }
+                objname[1] = serialize(objname[1]);
+                val = "O" + objname[1].substring(1, objname[1].length - 1);
+            }
+            */
+            var count = 0;
+            var vals = "";
+            var okey;
+            var key;
+            for (key in mixed_value) {
+                ktype = _getType(mixed_value[key]);
+                if (ktype == "function") { 
+                    continue; 
+                }
+                
+                okey = (key.match(/^[0-9]+$/) ? parseInt(key) : key);
+                vals += serialize(okey) +
+                        serialize(mixed_value[key]);
+                count++;
+            }
+            val += ":" + count + ":{" + vals + "}";
+            break;
+    }
+    if (type != "object" && type != "array") val += ";";
+    return val;
 }
