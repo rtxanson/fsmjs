@@ -156,9 +156,23 @@ function FSM( )
 		Q[q][I] = sr.a0;
 	}
 
+	// unsets q
+	// returns void
+	fsm.unsetQ = function ( q )
+	{
+		Q[q] = undefined;
+	}
+
+	// checks if q is defined
+	// returns bool
+	fsm.isQ = function ( q )
+	{
+		return ( Q[q] != undefined );
+	}
+
 	// deletes all undefined states in Q array
 	// returns void
-	fsm.shrinkQ = function()
+	fsm.shrink = function()
 	{
 		var count = 0;
 		var newIndices = {};
@@ -466,12 +480,16 @@ function FSM( )
 	fsm.plusClosure = function()
 	{
 		for ( var p in Q ) {
-			if ( fsm.isF( p ) ) {
-				for ( var q in Q ) {
-					if ( fsm.isI( q ) ) {
-						fsm.setE( p, q, EPS, EPS, fsm.getF( p ) );
-					}
-				}
+			if (! fsm.isF( p ) ) continue;
+			for ( var q in Q ) {
+				if (! fsm.isI( q ) ) continue;
+				fsm.setE( 
+					p, q, EPS, EPS, 
+					sr.aProduct(
+						fsm.getF( p ),
+						fsm.getI( q )
+					)
+				);
 			}
 		}
 	}
@@ -638,12 +656,37 @@ function FSM( )
 		}
 	}
 
-	
+	fsm.connect = function()
+	{
+		accessibleQ = {};
+		for ( var q in Q ) {
+			if (! fsm.isI( q ) ) continue;
+			accessibleQ[q] = true;
+		}
+
+		var added = false;
+		do {
+			added = false;
+			for ( var p in accessibleQ ) {
+				for ( var q in Q[p][E] ) {
+					if ( accessibleQ[q] ) continue;
+					accessibleQ[q] = true;
+					added = true;
+				}
+			}
+		} while( added );
+
+		for ( var q in Q ) {
+			if ( accessibleQ[q] ) continue;
+			fsm.unsetQ( q );
+		}
+	}	
 
 	fsm.print = function()
 	{
 		var code = "digraph {\n" ;	
 		for ( var p in Q ) {
+			if (! fsm.isQ( p ) ) continue;
 			for ( var q in Q[p][E] ) {
 				for ( var a in Q[p][E][q] ) {
 					for ( var b in Q[p][E][q][a] ) {
@@ -661,12 +704,12 @@ function FSM( )
 			}
 		}
 		for ( var q in Q ) {
+			if (! fsm.isQ( q ) ) continue;
 			code +=
 				q + 
 				" [ " +
 				"label=\"" +
 					fsm.getN( q ) +
-					"\n" +
 					// print weights only if not a0 or a1
 					( ( fsm.isI( q ) && fsm.getI( q ) != sr.a1 ) ? "\\nI=" + fsm.getI( q ) : "" ) + 
 					( ( fsm.isF( q ) && fsm.getF( q ) != sr.a1 ) ? "\\nF=" + fsm.getF( q ) : "" ) + 
@@ -691,8 +734,8 @@ runTests();
 
 //exampleUnion();
 //exampleConcat();
-exampleIntersect();
-//exampleIntersectEpsilon();
+//exampleIntersect();
+exampleIntersectEpsilon();
 
 //exampleRemoveEpsilon();
 //exampleSimple();
@@ -781,8 +824,13 @@ function runTests()
 
 	fsm3 = new FSM();
 	fsm3.intersect( fsm1, fsm2 );
+	//return ( serialize( fsm3 ) == 'a:2:{s:1:"Q";a:6:{i:0;a:4:{i:0;a:1:{i:5;a:1:{i:1;a:1:{i:1;d:0.3;}}}i:1;i:0;i:2;d:0.5;i:3;s:3:"0,0";}i:1;a:4:{i:0;a:0:{}i:1;i:0;i:2;i:0;i:3;s:3:"0,1";}i:2;a:4:{i:0;a:0:{}i:1;i:0;i:2;i:0;i:3;s:3:"1,0";}i:3;a:4:{i:0;a:0:{}i:1;d:0.5;i:2;i:0;i:3;s:3:"1,1";}i:4;a:4:{i:0;a:0:{}i:1;i:0;i:2;i:0;i:3;s:3:"2,0";}i:5;a:4:{i:0;a:0:{}i:1;d:0.4;i:2;i:0;i:3;s:3:"2,1";}}s:5:"isFSA";b:1;}' );
 
-	return ( serialize( fsm3 ) == 'a:2:{s:1:"Q";a:6:{i:0;a:4:{i:0;a:1:{i:5;a:1:{i:1;a:1:{i:1;d:0.3;}}}i:1;i:0;i:2;d:0.5;i:3;s:3:"0,0";}i:1;a:4:{i:0;a:0:{}i:1;i:0;i:2;i:0;i:3;s:3:"0,1";}i:2;a:4:{i:0;a:0:{}i:1;i:0;i:2;i:0;i:3;s:3:"1,0";}i:3;a:4:{i:0;a:0:{}i:1;d:0.5;i:2;i:0;i:3;s:3:"1,1";}i:4;a:4:{i:0;a:0:{}i:1;i:0;i:2;i:0;i:3;s:3:"2,0";}i:5;a:4:{i:0;a:0:{}i:1;d:0.4;i:2;i:0;i:3;s:3:"2,1";}}s:5:"isFSA";b:1;}' );
+	fsm3.connect();
+	fsm3.shrink();
+
+	return ( serialize( fsm3 ) == 'a:2:{s:1:"Q";a:2:{i:0;a:4:{i:0;a:1:{i:1;a:1:{i:1;a:1:{i:1;d:0.3;}}}i:1;i:0;i:2;d:0.5;i:3;s:3:"0,0";}i:1;a:4:{i:0;a:0:{}i:1;d:0.4;i:2;i:0;i:3;s:3:"2,1";}}s:5:"isFSA";b:1;}' );
+
 
 	},
 
@@ -951,7 +999,7 @@ function exampleIntersect()
 	fsm3 = new FSM();
 	fsm3.intersect( fsm1, fsm2 );
 	fsm3.print();
-	fsm3.shrinkQ();
+	fsm3.shrink();
 	fsm3.print();
 }
 
@@ -968,7 +1016,7 @@ function exampleIntersectEpsilon()
 
 	fsm2 = new FSM();
 	fsm2.setE( 0, 1, EPS, EPS, 0.8 );
-	fsm2.setE( 1, 2, 0, 1 );
+	fsm2.setE( 1, 2, 0 );
 	fsm2.setI( 0 );
 	fsm2.setF( 2 );
 
@@ -977,8 +1025,9 @@ function exampleIntersectEpsilon()
 	fsm3 = new FSM();
 	fsm3.intersect( fsm1, fsm2 );
 	fsm3.print();
-	//fsm3.shrinkQ();
-	//fsm3.print();
+	fsm3.connect();
+	fsm3.shrink();
+	fsm3.print();
 }
 
 /**
