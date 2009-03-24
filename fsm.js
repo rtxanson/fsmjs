@@ -1,6 +1,10 @@
 var symbols = ['a', 'b', 'c', 'd', 'e'];
-symbols[-1] = '<eps>';
 const EPS = -1;
+const EPS1 = -2;
+const EPS2 = -3;
+symbols[EPS] = '<eps>';
+symbols[EPS1] = '<eps1>';
+symbols[EPS2] = '<eps2>';
 
 
 var tropicalSR = {
@@ -223,12 +227,13 @@ function FSM( )
 	// returns bool
 	fsm.hasE = function( p, a, b ) 
 	{
-		if ( b == undefined ) b = a;
+		//if ( b == undefined ) b = a;
 		for ( q in Q[p][E] ) {
 			for ( ai in Q[p][E][q] ) {
-				if ( ai != a ) continue;
+				if ( ( a != undefined ) && ( a != ai ) ) continue;
 				for ( bi in Q[p][E][q][ai] ) {
-					if ( bi == b ) return true;
+					if ( ( b != undefined ) && ( b != bi ) ) continue;
+					return true;
 				}
 			}
 		}
@@ -251,6 +256,7 @@ function FSM( )
 	// returns void
 	fsm.unsetE = function( p, q, a, b ) 
 	{
+		if ( b == undefined ) b = a;
 		if (! fsm.isE( p, q, a, b ) ) return;
 		delete Q[p][E][q][a][b];
 	}
@@ -328,7 +334,7 @@ function FSM( )
 		return ( Q[q][F] != sr.a0 );
 	}
 
-	// map all state indicies in Q[][E] to new ones
+	// map all state indicies in Q[p][E] to new ones
 	// returns void
 	fsm.adjustE = function( p, newIndices )
 	{
@@ -339,7 +345,7 @@ function FSM( )
 			Q[p][E] = E2;
 	}
 
-	// increase all state indicies in Q[][E] by offset
+	// increase all state indicies in Q[p][E] by offset
 	// returns void
 	fsm.transposeE = function( p, offset )
 	{
@@ -429,10 +435,79 @@ function FSM( )
 		if (! fsm1.isFSA ) throw "fsm1 must be a FSA.";
 		if (! fsm2.isFSA ) throw "fsm2 must be a FSA.";
 
-		fsm.compose( fsm1, fsm2 );
+		fsm.composeDo( fsm1, fsm2 );
+	}
+
+	fsm.renameE = function( abOld, abNew )
+	{
+		for ( var p in fsm.Q ) {
+			for ( var q in fsm.Q[p][E] ) {
+				for ( var a in fsm.Q[p][E][q] ) {
+					for ( var b in fsm.Q[p][E][q][a] ) {
+						if ( b != abOld ) continue;
+						fsm.Q[p][E][q][a][abNew] = fsm.Q[p][E][q][a][abOld]; 
+						delete fsm.Q[p][E][q][a][abOld]; 
+					}
+					if ( a != abOld ) continue;
+					fsm.Q[p][E][q][abNew] = fsm.Q[p][E][q][abOld]; 
+					delete fsm.Q[p][E][q][abOld]; 
+				}
+			}
+		}
 	}
 
 	fsm.compose = function( fsm1, fsm2 )
+	{
+		fsm1.renameE( EPS, EPS1 );
+		for ( q in fsm1.Q ) {
+			fsm1.setE( q, q, EPS2, EPS2 );
+		}
+		fsm1.print();	
+
+		fsm2.renameE( EPS, EPS2 );
+		for ( q in fsm2.Q ) {
+			fsm2.setE( q, q, EPS1, EPS1 );
+		}
+		fsm2.print();	
+
+		fsmEpsFilter = new FSM();
+		for ( var ab in symbols ) {
+			if ( ab < 0 ) continue;
+			fsmEpsFilter.setE( 0, 0, ab );
+			fsmEpsFilter.setE( 1, 0, ab );
+			fsmEpsFilter.setE( 2, 0, ab );
+		}
+
+		fsmEpsFilter.setE( 0, 1, EPS1, EPS1 );
+		fsmEpsFilter.setE( 0, 2, EPS2, EPS2 );
+		fsmEpsFilter.setE( 0, 0, EPS1, EPS2 );
+		fsmEpsFilter.setE( 1, 1, EPS1, EPS1 );
+		fsmEpsFilter.setE( 2, 2, EPS2, EPS2 );
+
+		fsmEpsFilter.setI( 0 );
+		fsmEpsFilter.setF( 0 );
+		fsmEpsFilter.setF( 1 );
+		fsmEpsFilter.setF( 2 );
+
+		//fsmEpsFilter.print();
+
+		fsm1Filtered = new FSM();
+		fsm1Filtered.composeDo( fsm1, fsmEpsFilter );
+
+		fsm1Filtered.connect();
+		fsm1Filtered.shrink();
+		//fsm1Filtered.print();
+
+		fsm.composeDo( fsm1Filtered, fsm2 );
+		fsm.print();
+		fsm.connect();
+		fsm.shrink();
+		fsm.print();
+		fsm.renameE( EPS1, EPS );
+		fsm.renameE( EPS2, EPS );
+	}
+
+	fsm.composeDo = function( fsm1, fsm2 )
 	{
 		for ( var p1 in fsm1.Q ) {
 			for ( var p2 in fsm2.Q ) {
@@ -440,23 +515,25 @@ function FSM( )
 				fsm.setI( p, sr.aProduct( fsm1.getI( p1 ), fsm2.getI( p2 ) ) );
 				fsm.setF( p, sr.aProduct( fsm1.getF( p1 ), fsm2.getF( p2 ) ) ); 
 				// epsilon transitions
-				if (! fsm2.hasE( p2, EPS ) ) { 
-					for ( var q1 in fsm1.Q[p1][E] ) {
-						if (! fsm1.isE( p1, q1, EPS ) ) continue;
-						var q = fsm.pairQ( p2, q1, fsm1.Q.length );
-						fsm.setE( 
-							p, q, EPS, EPS,
-							fsm1.getE( p1, q1, EPS )
-						);
+				for ( var q1 in fsm1.Q[p1][E] ) {
+					for ( var a1 in fsm1.Q[p1][E][q1] ) {
+						for ( var b1 in fsm1.Q[p1][E][q1][a1] ) {
+							if ( b1 != EPS ) continue;
+							var q = fsm.pairQ( q1, p2, fsm2.Q.length );
+							fsm.setE( 
+								p, q, a1, b1,
+								fsm1.getE( p1, q1, a1, b1 )
+							);
+						}
 					}
 				}
-				if (! fsm1.hasE( p1, EPS ) ) { 
-					for ( var q2 in fsm2.Q[p2][E] ) {
-						if (! fsm2.isE( p2, q2, EPS ) ) continue;
+				for ( var q2 in fsm2.Q[p2][E] ) {
+					var a2 = EPS;
+					for ( var b2 in fsm2.Q[p2][E][q2][a2] ) {
 						var q = fsm.pairQ( p1, q2, fsm2.Q.length );
 						fsm.setE( 
-							p, q, EPS, EPS,
-							fsm2.getE( p2, q2, EPS )
+							p, q, a2, b2,
+							fsm2.getE( p2, q2, a2, b2 )
 						);
 					}
 				}
@@ -735,9 +812,9 @@ function FSM( )
 		code += "rankdir=LR\n" ;	
 		code += "}" ;	
 
-		document.write( '<textarea cols="40" rows="20">' + code + "</textarea>" );	
+		document.write( '<textarea cols="40" rows="5">' + code + "</textarea>" );	
 		document.write( "<img src='fsm.gif.php?code=" + code + "'>" );	
-		document.write( '<br>' );	
+		document.write( '<hr>' );	
 	}
 
 }
@@ -748,10 +825,9 @@ runTests();
 //exampleConcat();
 //exampleIntersect();
 //exampleIntersectEpsilon();
-//exampleCompose();
+exampleCompose();
 
-
-exampleRemoveEpsilon();
+//exampleRemoveEpsilon();
 //exampleSimple();
 
 //exampleClosure();
@@ -1034,7 +1110,6 @@ function exampleIntersectEpsilon()
 	fsm3 = new FSM();
 	fsm3.intersect( fsm1, fsm2 );
 	fsm3.print();
-return;
 	fsm3.connect();
 	fsm3.shrink();
 	fsm3.print();
@@ -1063,10 +1138,6 @@ function exampleCompose()
 
 	fsm3 = new FSM();
 	fsm3.compose( fsm1, fsm2 );
-	fsm3.print();
-return;
-	fsm3.connect();
-	fsm3.shrink();
 	fsm3.print();
 }
 
