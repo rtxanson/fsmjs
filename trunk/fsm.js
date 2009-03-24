@@ -1,4 +1,4 @@
-var symbols = ['a','b','c'];
+var symbols = ['a', 'b', 'c', 'd', 'e'];
 symbols[-1] = '<eps>';
 const EPS = -1;
 
@@ -429,6 +429,11 @@ function FSM( )
 		if (! fsm1.isFSA ) throw "fsm1 must be a FSA.";
 		if (! fsm2.isFSA ) throw "fsm2 must be a FSA.";
 
+		fsm.compose( fsm1, fsm2 );
+	}
+
+	fsm.compose = function( fsm1, fsm2 )
+	{
 		for ( var p1 in fsm1.Q ) {
 			for ( var p2 in fsm2.Q ) {
 				var p = fsm.pairQ( p1, p2, fsm2.Q.length );
@@ -457,17 +462,19 @@ function FSM( )
 				}
 				for ( var q1 in fsm1.Q[p1][E] ) {
 					for ( var q2 in fsm2.Q[p2][E] ) {
-						for ( var a in fsm1.Q[p1][E][q1] ) {
-							for ( var b in fsm1.Q[p1][E][q1][a] ) {
-								if (! fsm2.isE( p2, q2, a, b ) ) continue;
-								var q = fsm.pairQ( q1, q2, fsm2.Q.length );
-								fsm.setE( 
-									p, q, a, b,
-									sr.aProduct(
-										fsm1.getE( p1, q1, a, b ),
-										fsm2.getE( p2, q2, a, b )
-									)
-								);
+						for ( var a1 in fsm1.Q[p1][E][q1] ) {
+							for ( var b1a2 in fsm1.Q[p1][E][q1][a1] ) {
+								for ( var b2 in fsm2.Q[p2][E][q2][b1a2] ) {
+									//alert(p1 + " " + q1 + " " + p2 + " " + q2 + " " + a1 );
+									var q = fsm.pairQ( q1, q2, fsm2.Q.length );
+									fsm.setE( 
+										p, q, a1, b2,
+										sr.aProduct(
+											fsm1.getE( p1, q1, a1, b1a2 ),
+											fsm2.getE( p2, q2, b1a2, b2 )
+										)
+									);
+								}
 							}
 						}
 					}
@@ -517,16 +524,17 @@ function FSM( )
 						sr.aProductClosure( fsm.getE( i, j, EPS, EPS ) )
 					);
 */
+					d[i][j] = fsm.getE( i, j, EPS, EPS );
 				}
 			}
 		}
-		alert(dump(d));
+		//alert(dump(d));
 		for ( var k in Q ) {
 			for ( var i in Q ) {
 				if ( i == k ) continue;
 				for ( var j in Q ) {
 					if ( j == k ) continue;
-					alert( "1) " + i + " -> " + k + " -> " + j + " : " + d[i][j] + " + " + d[i][k] + " x " + d[k][k] + "* x " + d[k][j] );
+					//alert( "1) " + i + " -> " + k + " -> " + j + " : " + d[i][j] + " + " + d[i][k] + " x " + d[k][k] + "* x " + d[k][j] );
 					d[i][j] = sr.aSum( 
 						d[i][j],
 						sr.aProduct(
@@ -537,7 +545,7 @@ function FSM( )
 							)
 						)
 					);
-					alert( d[i][j] );
+					//alert( d[i][j] );
 					//alert("1) " + i + " -> " + k + " -> " + j + " : " + d[i][j] );
 					//alert(k + ", " + d[k][k] + ", " + sr.aProductClosure( d[k][k] ) );
 					//alert( nextd[i][j] );
@@ -545,20 +553,22 @@ function FSM( )
 			}
 			for ( var i in Q ) {
 				if ( i == k ) continue;
-				alert( "2) " + k + " -> " + i + " : " + d[k][k] + "* x " + d[k][i] );
+				//alert( "2) " + k + " -> " + i + " : " + d[k][k] + "* x " + d[k][i] );
 				d[k][i] = sr.aProduct(
 					sr.aProductClosure( d[k][k] ),
+					//d[k][k], 
 					d[k][i]
 				);
-				alert( d[k][i] );
-				alert( "3) " + i + " -> " + k + " : " + d[i][k] + " x " + d[k][k] + "*" );
+				//alert( d[k][i] );
+				//alert( "3) " + i + " -> " + k + " : " + d[i][k] + " x " + d[k][k] + "*" );
 				d[i][k] = sr.aProduct(
 					d[i][k],
 					sr.aProductClosure( d[k][k] )
+					//d[k][k] 
 				);
-				alert( d[i][k] );
+				//alert( d[i][k] );
 			}
-			//d[k][k] = sr.aProductClosure( d[k][k] )
+			d[k][k] = sr.aProductClosure( d[k][k] )
 		}
 		alert(dump(d));
 	}
@@ -610,6 +620,7 @@ function FSM( )
 		for ( p in Q ) {
 			epsClosure[p] = fsm.epsClosure( p ); 
 		}
+		alert( dump( epsClosure ) );
 
 		for ( p in Q ) {
 			for ( var q in epsClosure[p] ) {
@@ -632,7 +643,7 @@ function FSM( )
 							fsm.setF(
 								p,
 								sr.aSum(
-									( p != q ?  fsm.getF( p ) : sr.a0 ),
+									( p != q ?  fsm.getF( p ) : sr.a0 ), // Mohri always uses here fsm.getF(p) here
 									sr.aProduct(
 										epsClosure[p][q],
 										fsm.getF( q )
@@ -667,6 +678,8 @@ function FSM( )
 		var added = false;
 		do {
 			added = false;
+			// it is actually unnecessary to iterate always over all accessibleQ 
+			// only over the added ones would be enough
 			for ( var p in accessibleQ ) {
 				for ( var q in Q[p][E] ) {
 					if ( accessibleQ[q] ) continue;
@@ -730,14 +743,16 @@ function FSM( )
 
 }
 
-runTests();
+//runTests();
 
 //exampleUnion();
 //exampleConcat();
 //exampleIntersect();
-exampleIntersectEpsilon();
+//exampleIntersectEpsilon();
+//exampleCompose();
 
-//exampleRemoveEpsilon();
+
+exampleRemoveEpsilon();
 //exampleSimple();
 
 //exampleClosure();
@@ -877,10 +892,9 @@ function exampleRemoveEpsilon()
 	fsm.setF( 1, 0.3 );
 	fsm.setF( 0, 0.25 );
 
-	fsm.setF( 0 );
 	fsm.print();
-	//fsm.distance();
-	//return;
+	fsm.distance();
+	return;
 	fsm.removeEpsilon();
 	fsm.print();
 }
@@ -1010,7 +1024,6 @@ function exampleIntersectEpsilon()
 	fsm1.setE( 1, 2, EPS, EPS, 0.8 );
 	fsm1.setI( 0 );
 	fsm1.setF( 2 );
-	//fsm1.setF( 1 );
 
 	fsm1.print();
 
@@ -1025,6 +1038,37 @@ function exampleIntersectEpsilon()
 	fsm3 = new FSM();
 	fsm3.intersect( fsm1, fsm2 );
 	fsm3.print();
+return;
+	fsm3.connect();
+	fsm3.shrink();
+	fsm3.print();
+}
+
+function exampleCompose()
+{
+	fsm1 = new FSM();
+	fsm1.setE( 0, 1, 0, 0 );
+	fsm1.setE( 1, 2, 1, EPS );
+	fsm1.setE( 2, 3, 2, EPS );
+	fsm1.setE( 3, 4, 3, 3 );
+	fsm1.setI( 0 );
+	fsm1.setF( 4 );
+
+	fsm1.print();
+
+	fsm2 = new FSM();
+	fsm2.setE( 0, 1, 0, 3 );
+	fsm2.setE( 1, 2, EPS, 4 );
+	fsm2.setE( 2, 3, 3, 0 );
+	fsm2.setI( 0 );
+	fsm2.setF( 3 );
+
+	fsm2.print();
+
+	fsm3 = new FSM();
+	fsm3.compose( fsm1, fsm2 );
+	fsm3.print();
+return;
 	fsm3.connect();
 	fsm3.shrink();
 	fsm3.print();
