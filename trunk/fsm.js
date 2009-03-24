@@ -508,23 +508,25 @@ function FSM( )
 		fsm.setF( q0 );
 	}
 
-	fsm.distance = function()
+	// calculates all-pairs-distance
+	// if symbols defined: only these symbols are considered
+	// returns distance matrix
+	fsm.distance = function( symbols )
 	{
 		var d = [];
 		for ( var i in Q ) {
 			d[i] = [];
 			for ( var j in Q ) {
-				if ( i != j ) {
-					d[i][j] = fsm.getE( i, j, EPS, EPS );
-				} else {
-					d[i][j] = sr.aProductClosure( fsm.getE( i, j, EPS, EPS ) );
-/*
-					d[i][j] = sr.aSum(
-						sr.a1,
-						sr.aProductClosure( fsm.getE( i, j, EPS, EPS ) )
-					);
-*/
-					d[i][j] = fsm.getE( i, j, EPS, EPS );
+				d[i][j] = sr.a0; 
+				for ( var a in Q[i][E][j] ) {
+					if ( ( symbols != undefined ) && ( symbols.indexOf( parseInt( a ) ) == -1  ) ) continue;
+					for ( var b in Q[i][E][j][a] ) {
+						if ( ( symbols != undefined ) && ( symbols.indexOf( parseInt( b ) ) == -1  ) ) continue;
+						d[i][j] = sr.aSum(
+							d[i][j],
+							fsm.getE( i, j, a, b )
+						);
+					}
 				}
 			}
 		}
@@ -570,7 +572,8 @@ function FSM( )
 			}
 			d[k][k] = sr.aProductClosure( d[k][k] )
 		}
-		alert(dump(d));
+		//alert(dump(d));
+		return d;
 	}
 
 	// equivalence operations  --------------------------------------------------------------------
@@ -616,14 +619,10 @@ function FSM( )
 
 	fsm.removeEpsilon = function()
 	{
-		var epsClosure = [];
-		for ( p in Q ) {
-			epsClosure[p] = fsm.epsClosure( p ); 
-		}
-		alert( dump( epsClosure ) );
-
+		var epsClosure = fsm.distance( [EPS] );
 		for ( p in Q ) {
 			for ( var q in epsClosure[p] ) {
+				if ( epsClosure[p][q] == sr.a0 ) continue;
 				for ( var r in Q[q][E] ) {
 					for ( var a in Q[q][E][r] ) {
 						if ( a == EPS ) continue;
@@ -743,7 +742,7 @@ function FSM( )
 
 }
 
-//runTests();
+runTests();
 
 //exampleUnion();
 //exampleConcat();
@@ -763,9 +762,9 @@ exampleRemoveEpsilon();
 
 function runTests()
 {
-	var tests = [
-/*
-	function () { // RemoveEpsilon
+	var tests = {
+
+	removeEpsilon: function () { // RemoveEpsilon
 
 	fsm = new FSM();
 
@@ -780,11 +779,10 @@ function runTests()
 
 	fsm.removeEpsilon();
 
-	return ( serialize(fsm) == 'a:1:{s:1:"Q";a:2:{i:0;a:3:{i:0;a:2:{i:1;a:2:{i:0;a:1:{i:0;d:0.25;}s:2:"-1";a:0:{}}i:0;a:1:{i:1;a:1:{i:1;d:0.3125;}}}i:1;d:0.4375;i:2;i:0;}i:1;a:3:{i:0;a:2:{i:1;a:1:{s:2:"-1";a:0:{}}i:0;a:1:{i:1;a:1:{i:1;d:0.625;}}}i:1;d:0.375;i:2;i:1;}}}' );
+	return ( serialize( fsm ) == 'a:2:{s:1:"Q";a:2:{i:0;a:3:{i:0;a:2:{i:1;a:2:{i:0;a:1:{i:0;d:0.25;}s:2:"-1";a:0:{}}i:0;a:1:{i:1;a:1:{i:1;d:0.3125;}}}i:1;d:0.4375;i:2;i:0;}i:1;a:3:{i:0;a:2:{i:1;a:1:{s:2:"-1";a:0:{}}i:0;a:1:{i:1;a:1:{i:1;d:0.625;}}}i:1;d:0.375;i:2;i:1;}}s:5:"isFSA";b:1;}' );
+	},
 
-	});
-*/
-	function () { // union
+	union: function () { 
 
 	fsm1 = new FSM();
 	fsm1.setE( 0, 1, 0 );
@@ -803,7 +801,7 @@ function runTests()
 	return ( serialize(fsm1) == 'a:2:{s:1:"Q";a:4:{i:0;a:3:{i:0;a:2:{i:1;a:1:{i:0;a:1:{i:0;i:1;}}i:2;a:1:{i:1;a:1:{i:1;i:1;}}}i:1;i:0;i:2;i:0;}i:1;a:3:{i:0;a:0:{}i:1;i:1;i:2;i:0;}i:2;a:3:{i:0;a:0:{}i:1;i:1;i:2;i:0;}i:3;a:3:{i:0;a:2:{i:0;a:1:{s:2:"-1";a:1:{s:2:"-1";d:0.4;}}i:4;a:1:{s:2:"-1";a:1:{s:2:"-1";d:0.6;}}}i:1;i:0;i:2;i:1;}}s:5:"isFSA";b:1;}' );
 	},
 
-	function () { // concat
+	concat: function () { 
 
 	fsm1 = new FSM();
 	fsm1.setE( 0, 1, 0 );
@@ -823,7 +821,7 @@ function runTests()
 
 	},
 
-	function () { // intersect
+	intersect: function () { 
 
 	fsm1 = new FSM();
 	fsm1.setE( 0, 1, 0 );
@@ -849,7 +847,7 @@ function runTests()
 
 	},
 
-	function () { // closure tropical
+	closureTropical:  function () { 
 
 	fsm = new FSM();
 	fsm.setSR( tropicalSR );
@@ -870,7 +868,7 @@ function runTests()
 
 	},
 
-	function(){ return true; } ]
+	_last: function(){ return true; } }
 
 	for ( var i in tests ) {
 		if (! tests[i]() ) {
@@ -893,8 +891,6 @@ function exampleRemoveEpsilon()
 	fsm.setF( 0, 0.25 );
 
 	fsm.print();
-	fsm.distance();
-	return;
 	fsm.removeEpsilon();
 	fsm.print();
 }
