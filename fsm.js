@@ -201,10 +201,7 @@ function FSM( )
 	// returns void
 	fsm.setE = function( p, q, a, b, w ) 
 	{
-		if ( w == sr.a0 ) {
-			fsm.unsetE( p, q, a, b, w );
-			return;
-		}
+		if ( w == sr.a0 ) return; // 0 weight = no transition
 
 		if ( w == undefined ) w = sr.a1;	// weight trivially
 		if ( b == undefined ) b = a;
@@ -494,15 +491,13 @@ function FSM( )
 		fsm1Filtered = new FSM();
 		fsm1Filtered.composeDo( fsm1, fsmEpsFilter );
 
-		fsm1Filtered.connect();
-		fsm1Filtered.shrink();
-		//fsm1Filtered.print();
+		//fsm1Filtered.trim();
+		fsm1Filtered.print();
 
 		fsm.composeDo( fsm1Filtered, fsm2 );
 		fsm.print();
 		fsm.connect();
-		fsm.shrink();
-		fsm.print();
+		//fsm.trim();
 		fsm.renameE( EPS1, EPS );
 		fsm.renameE( EPS2, EPS );
 	}
@@ -769,7 +764,39 @@ function FSM( )
 			if ( accessibleQ[q] ) continue;
 			fsm.unsetQ( q );
 		}
+		fsm.shrink();
 	}	
+	
+	fsm.trim = function()
+	{
+		fsm.connect();
+		fsm.reverse();
+		fsm.connect();
+		fsm.reverse();
+	}
+
+	fsm.reverse = function()
+	{
+		// init help array
+		var QE = [];
+		for ( var q in Q ) {
+			QE[q] = [];
+		}
+		// remember reversed transitions in help array
+		for ( var p in Q ) {
+			for ( var q in Q[p][E] ) {
+				QE[q][p] = Q[p][E][q];
+			}
+		}
+		// copy help array to Q
+		for ( var q in QE ) {
+			Q[q][E] = QE[q];
+			// swap initial and final weight
+			var w = fsm.getI( q );
+			fsm.setI( q, fsm.getF( q ) );
+			fsm.setF( q, w );
+		}
+	}
 
 	fsm.print = function()
 	{
@@ -826,6 +853,7 @@ runTests();
 //exampleIntersect();
 //exampleIntersectEpsilon();
 exampleCompose();
+//exampleReverse();
 
 //exampleRemoveEpsilon();
 //exampleSimple();
@@ -916,7 +944,6 @@ function runTests()
 	//return ( serialize( fsm3 ) == 'a:2:{s:1:"Q";a:6:{i:0;a:4:{i:0;a:1:{i:5;a:1:{i:1;a:1:{i:1;d:0.3;}}}i:1;i:0;i:2;d:0.5;i:3;s:3:"0,0";}i:1;a:4:{i:0;a:0:{}i:1;i:0;i:2;i:0;i:3;s:3:"0,1";}i:2;a:4:{i:0;a:0:{}i:1;i:0;i:2;i:0;i:3;s:3:"1,0";}i:3;a:4:{i:0;a:0:{}i:1;d:0.5;i:2;i:0;i:3;s:3:"1,1";}i:4;a:4:{i:0;a:0:{}i:1;i:0;i:2;i:0;i:3;s:3:"2,0";}i:5;a:4:{i:0;a:0:{}i:1;d:0.4;i:2;i:0;i:3;s:3:"2,1";}}s:5:"isFSA";b:1;}' );
 
 	fsm3.connect();
-	fsm3.shrink();
 
 	return ( serialize( fsm3 ) == 'a:2:{s:1:"Q";a:2:{i:0;a:4:{i:0;a:1:{i:1;a:1:{i:1;a:1:{i:1;d:0.3;}}}i:1;i:0;i:2;d:0.5;i:3;s:3:"0,0";}i:1;a:4:{i:0;a:0:{}i:1;d:0.4;i:2;i:0;i:3;s:3:"2,1";}}s:5:"isFSA";b:1;}' );
 
@@ -1111,7 +1138,6 @@ function exampleIntersectEpsilon()
 	fsm3.intersect( fsm1, fsm2 );
 	fsm3.print();
 	fsm3.connect();
-	fsm3.shrink();
 	fsm3.print();
 }
 
@@ -1139,6 +1165,18 @@ function exampleCompose()
 	fsm3 = new FSM();
 	fsm3.compose( fsm1, fsm2 );
 	fsm3.print();
+}
+
+function exampleReverse()
+{
+	fsm = new FSM();
+	fsm.setE( 0, 1, 0 );
+	fsm.setE( 1, 2, 1 );
+	fsm.setI( 0, 0.5 );
+	fsm.setF( 2, 0.8 );
+	fsm.print();
+	fsm.reverse();
+	fsm.print();
 }
 
 /**
