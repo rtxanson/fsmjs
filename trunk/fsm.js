@@ -29,11 +29,16 @@ var realSR = {
 	// a = abstract
 	aSum: function( w1, w2 ) {
 		if ( w1 == "+inf" || w2 == "+inf" ) return "+inf";
+		var res = w1 + w2;
+		// round to avoid weird comma values
+		return Math.round( res * 10000 ) / 10000;
 		return w1 + w2;
 	},
 	aProduct: function( w1, w2 ) {
 		if ( w1 == this.a0 || w2 == this.a0 ) return this.a0;
 		if ( w1 == "+inf" || w2 == "+inf" ) return "+inf";
+		var res = w1 * w2;
+		return Math.round( res * 10000 ) / 10000;
 		return w1 * w2;
 	},
 	a0: 0,
@@ -41,7 +46,14 @@ var realSR = {
 	aProductClosure: function ( w ) {
 		if ( w > 1 ) return "+inf";
 		if ( w == 1 ) return 1;
+		var res =  1 / ( 1 - w ) ;
+		return Math.round( res * 10000 ) / 10000;
 		return 1 / ( 1 - w ) ;
+	},
+	aInverse: function ( w ) {
+		var res = 1 / w;
+		return Math.round( res * 10000 ) / 10000;
+		return 1 / w;
 	}
 }
 
@@ -492,12 +504,12 @@ function FSM( )
 		fsm1Filtered.composeDo( fsm1, fsmEpsFilter );
 
 		//fsm1Filtered.trim();
-		fsm1Filtered.print();
+		//fsm1Filtered.print();
 
 		fsm.composeDo( fsm1Filtered, fsm2 );
-		fsm.print();
+		//fsm.print();
 		fsm.connect();
-		//fsm.trim();
+		fsm.trim();
 		fsm.renameE( EPS1, EPS );
 		fsm.renameE( EPS2, EPS );
 	}
@@ -650,45 +662,6 @@ function FSM( )
 
 	// equivalence operations  --------------------------------------------------------------------
 
-	fsm.epsClosure = function( p, wToState, epsClosure )
-	{
-		if ( wToState == undefined ) var wToState = sr.a1;
-		if ( epsClosure == undefined ) var epsClosure = {};
-		//epsClosure[p] = sr.a0;
-		epsClosure[p] = wToState;
-
-		for ( var q in Q[p][E] ) {
-			for ( var a in Q[p][E][q] ) {
-				if ( a != EPS ) continue;
-				for ( var b in Q[p][E][q][a] ) {
-					if ( b != EPS ) continue;
-					// check if q already in closure
-					if (! epsClosure[q] ) {
-						epsClosure[q] = sr.aProduct(
-							wToState,
-							Q[p][E][q][a][b]
-						);
-						extendObject( 
-							epsClosure, 
-							fsm.epsClosure( q, epsClosure[q], epsClosure ) 
-						);
-					} else {
-						epsClosure[q] = sr.aProduct(
-							epsClosure[q],
-							sr.aProductClosure(
-								sr.aProduct(
-									wToState/epsClosure[q],
-									Q[p][E][q][a][b]
-								)
-							)
-						);
-					}
-				}
-			}
-		}
-		return epsClosure;
-	}
-
 	fsm.removeEpsilon = function()
 	{
 		var epsClosure = fsm.distance( [EPS] );
@@ -734,6 +707,105 @@ function FSM( )
 					}
 				}
 				fsm.unsetE( p, q, EPS, EPS );
+			}
+		}
+	}
+/*
+	fsm.powersetQ( states )
+	{
+		var p = 0;
+		for ( var q in states ) {
+			p += Math.pow( 2, q );
+		}
+		return p;
+	}
+*/
+/*
+	fsm.determinize = function()
+	{
+		var fsmD = new FSM();
+		queue = [];
+		for ( var q in Q ) {
+			if (! fsm.isI( q ) ) continue;
+			queue.push( [ q, sr.a1 ] );
+		}
+	
+		var qD = 0;	
+		// while ( queue != [] ) {
+			
+			[ p, v ] = queue.shift();
+			//alert ( fsm.powersetQ( 3 ) );
+
+			var wD = 0;
+			var qD = queue.length - 1;
+			var qName = ""; 
+			for ( var q in Q[p][E] ) {
+				for ( var a in Q[p][E][q] ) {
+					w = fsm.getE( p, q, a, a ); // temporary assuming a WFS_A_ 
+					wD = sr.aSum(
+						wD,
+						sr.aProduct( v, w )
+					);
+					qName += q + "," + sr.aProduct( v, w ) + " / ";
+				}
+			}
+			alert( wD + "\n" + qName );
+
+		// }
+		fsm = fsmD;
+
+	}
+*/
+
+	fsm.pushWeights = function()
+	{
+		var d = fsm.distance();
+		var pot = [];
+		for ( var p in Q ) {
+			for ( var q in Q ) {
+				if (! fsm.isF( q ) ) continue;
+				pot[p] = sr.aSum(
+					( pot[p] != undefined ? pot[p] : sr.a0 ),
+					sr.aProduct(
+						d[p][q],
+						fsm.getF( q )
+					)
+				);
+			}
+		}
+		//alert( dump ( pot ) );
+		for ( var p in Q ) {
+			fsm.setI( 
+				p,
+				sr.aProduct(
+					fsm.getI( p ),
+					pot[p]
+				)
+			);
+			fsm.setF( 
+				p, 
+				sr.aProduct(
+					sr.aInverse( pot[p] ),
+					fsm.getF( p )
+				)
+			);
+			for ( var q in Q[p][E] ) {
+				for ( var a in Q[p][E][q] ) {
+					for ( var b in Q[p][E][q][a] ) {
+						var w = fsm.getE( p, q, a, b );
+						fsm.unsetE( p, q, a, b );
+						fsm.setE( 
+							p, q, a, b, 
+							sr.aProduct(
+								sr.aInverse( pot[p] ),
+								sr.aProduct(
+									w,
+									pot[q]
+								)
+							)
+						);
+					}
+				}
 			}
 		}
 	}
@@ -852,10 +924,14 @@ runTests();
 //exampleConcat();
 //exampleIntersect();
 //exampleIntersectEpsilon();
-exampleCompose();
+//exampleCompose();
 //exampleReverse();
 
 //exampleRemoveEpsilon();
+//exampleDeterminize();
+
+examplePushWeights();
+
 //exampleSimple();
 
 //exampleClosure();
@@ -968,6 +1044,43 @@ function runTests()
 	fsm.starClosure();
 
 	return ( serialize( fsm ) == 'a:2:{s:1:"Q";a:5:{i:0;a:3:{i:0;a:1:{i:3;a:1:{s:2:"-1";a:1:{s:2:"-1";i:2;}}}i:1;i:2;i:2;s:4:"+inf";}i:1;a:3:{i:0;a:1:{i:2;a:1:{i:1;a:1:{i:1;i:0;}}}i:1;s:4:"+inf";i:2;s:4:"+inf";}i:2;a:3:{i:0;a:2:{i:1;a:1:{i:2;a:1:{i:2;i:1;}}i:3;a:1:{s:2:"-1";a:1:{s:2:"-1";i:1;}}}i:1;i:1;i:2;s:4:"+inf";}i:3;a:3:{i:0;a:2:{i:0;a:1:{i:0;a:1:{i:0;i:0;}}i:1;a:1:{i:2;a:1:{i:2;i:0;}}}i:1;s:4:"+inf";i:2;s:4:"+inf";}i:4;a:3:{i:0;a:1:{i:3;a:1:{s:2:"-1";a:1:{s:2:"-1";i:0;}}}i:1;i:0;i:2;i:0;}}s:5:"isFSA";b:1;}' );
+
+	},
+
+	pushWeights:  function () { 
+
+	fsm = new FSM();
+	fsm.setI( 0 );
+	fsm.setE( 0, 1, 0, 0, 2 );
+	fsm.setE( 1, 15, 1, 1, 1 );
+	fsm.setE( 15, 16, 0, 0, 0.5 );
+	fsm.setE( 15, 17, 1, 1, 0.5 );
+	fsm.setF( 16, 0.1 );
+	fsm.setF( 17, 0.12 );
+
+	fsm.setE( 0, 2, 1, 1, 2 );
+	fsm.setE( 2, 11, 0, 0, 0.5 );
+	fsm.setE( 11, 14, 2, 2, 1 );
+	fsm.setE( 2, 12, 1, 1, 0.5 );
+	fsm.setE( 12, 13, 2, 2, 1 );
+	fsm.setF( 14, 0.3 );
+	fsm.setF( 13, 0.02 );
+
+	fsm.setE( 0, 3, 2, 2, 4 );
+	fsm.setE( 3, 4, 0, 0, 0.25 );
+	fsm.setE( 4, 10, 1, 1, 1 );
+	fsm.setE( 3, 5, 1, 1, 0.5 );
+	fsm.setE( 5, 8, 0, 0, 0.5 );
+	fsm.setE( 5, 9, 1, 1, 0.5 );
+	fsm.setE( 3, 6, 2, 2, 0.25 );
+	fsm.setE( 6, 7, 0, 0, 1 );
+	fsm.setF( 10, 0.03 );
+	fsm.setF( 8, 0.18 );
+	fsm.setF( 9, 0.07 );
+	fsm.setF( 7, 0.18 );
+
+	return  ( serialize( fsm ) == 'a:2:{s:1:"Q";a:18:{i:0;a:3:{i:0;a:3:{i:1;a:1:{i:0;a:1:{i:0;i:2;}}i:2;a:1:{i:1;a:1:{i:1;i:2;}}i:3;a:1:{i:2;a:1:{i:2;i:4;}}}i:1;i:0;i:2;i:1;}i:1;a:3:{i:0;a:1:{i:15;a:1:{i:1;a:1:{i:1;i:1;}}}i:1;i:0;i:2;i:0;}i:2;a:3:{i:0;a:2:{i:11;a:1:{i:0;a:1:{i:0;d:0.5;}}i:12;a:1:{i:1;a:1:{i:1;d:0.5;}}}i:1;i:0;i:2;i:0;}i:3;a:3:{i:0;a:3:{i:4;a:1:{i:0;a:1:{i:0;d:0.25;}}i:5;a:1:{i:1;a:1:{i:1;d:0.5;}}i:6;a:1:{i:2;a:1:{i:2;d:0.25;}}}i:1;i:0;i:2;i:0;}i:4;a:3:{i:0;a:1:{i:10;a:1:{i:1;a:1:{i:1;i:1;}}}i:1;i:0;i:2;i:0;}i:5;a:3:{i:0;a:2:{i:8;a:1:{i:0;a:1:{i:0;d:0.5;}}i:9;a:1:{i:1;a:1:{i:1;d:0.5;}}}i:1;i:0;i:2;i:0;}i:6;a:3:{i:0;a:1:{i:7;a:1:{i:0;a:1:{i:0;i:1;}}}i:1;i:0;i:2;i:0;}i:7;a:3:{i:0;a:0:{}i:1;d:0.18;i:2;i:0;}i:8;a:3:{i:0;a:0:{}i:1;d:0.18;i:2;i:0;}i:9;a:3:{i:0;a:0:{}i:1;d:0.07;i:2;i:0;}i:10;a:3:{i:0;a:0:{}i:1;d:0.03;i:2;i:0;}i:11;a:3:{i:0;a:1:{i:14;a:1:{i:2;a:1:{i:2;i:1;}}}i:1;i:0;i:2;i:0;}i:12;a:3:{i:0;a:1:{i:13;a:1:{i:2;a:1:{i:2;i:1;}}}i:1;i:0;i:2;i:0;}i:13;a:3:{i:0;a:0:{}i:1;d:0.02;i:2;i:0;}i:14;a:3:{i:0;a:0:{}i:1;d:0.3;i:2;i:0;}i:15;a:3:{i:0;a:2:{i:16;a:1:{i:0;a:1:{i:0;d:0.5;}}i:17;a:1:{i:1;a:1:{i:1;d:0.5;}}}i:1;i:0;i:2;i:0;}i:16;a:3:{i:0;a:0:{}i:1;d:0.1;i:2;i:0;}i:17;a:3:{i:0;a:0:{}i:1;d:0.12;i:2;i:0;}}s:5:"isFSA";b:1;}' );
+	
 
 	},
 
@@ -1179,6 +1292,69 @@ function exampleReverse()
 	fsm.print();
 }
 
+function examplePushWeights()
+{
+/*
+	fsm = new FSM();
+	fsm.setE( 0, 1, 0, 0, 0.7 );
+	fsm.setE( 1, 2, 0, 0, 0.3 );
+	fsm.setI( 0 );
+	fsm.setF( 2 );
+	fsm.print();
+	fsm.pushWeights();
+	fsm.print();
+*/
+	fsm = new FSM();
+	fsm.setI( 0 );
+	fsm.setE( 0, 1, 0, 0, 2 );
+	fsm.setE( 1, 15, 1, 1, 1 );
+	fsm.setE( 15, 16, 0, 0, 0.5 );
+	fsm.setE( 15, 17, 1, 1, 0.5 );
+	fsm.setF( 16, 0.1 );
+	fsm.setF( 17, 0.12 );
+
+	fsm.setE( 0, 2, 1, 1, 2 );
+	fsm.setE( 2, 11, 0, 0, 0.5 );
+	fsm.setE( 11, 14, 2, 2, 1 );
+	fsm.setE( 2, 12, 1, 1, 0.5 );
+	fsm.setE( 12, 13, 2, 2, 1 );
+	fsm.setF( 14, 0.3 );
+	fsm.setF( 13, 0.02 );
+
+	fsm.setE( 0, 3, 2, 2, 4 );
+	fsm.setE( 3, 4, 0, 0, 0.25 );
+	fsm.setE( 4, 10, 1, 1, 1 );
+	fsm.setE( 3, 5, 1, 1, 0.5 );
+	fsm.setE( 5, 8, 0, 0, 0.5 );
+	fsm.setE( 5, 9, 1, 1, 0.5 );
+	fsm.setE( 3, 6, 2, 2, 0.25 );
+	fsm.setE( 6, 7, 0, 0, 1 );
+	fsm.setF( 10, 0.03 );
+	fsm.setF( 8, 0.18 );
+	fsm.setF( 9, 0.07 );
+	fsm.setF( 7, 0.18 );
+
+	fsm.print();
+	fsm.pushWeights();
+	fsm.print();
+
+}
+
+/*
+function exampleDeterminize()
+{
+	fsm = new FSM();
+	fsm.setE( 0, 1, 0, 0, 0.3 );
+	fsm.setE( 0, 2, 0, 0, 0.7 );
+	fsm.setI( 0 );
+	fsm.setF( 1 );
+	fsm.setF( 2 );
+
+  fsm.print();
+	fsm.determinize();
+  fsm.print();
+}
+*/
 /**
  * Function : dump()
  * Arguments: The data - array,hash(associative array),object
