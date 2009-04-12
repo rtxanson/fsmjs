@@ -710,52 +710,113 @@ function FSM( )
 			}
 		}
 	}
-/*
-	fsm.powersetQ( states )
+
+	function deepIndexOf( ar, el )
 	{
-		var p = 0;
-		for ( var q in states ) {
-			p += Math.pow( 2, q );
+		for ( var i in ar ) {
+			if ( serialize( ar[i] ) == serialize( el ) ) return i;
 		}
-		return p;
+		return -1;
 	}
-*/
-/*
+
 	fsm.determinize = function()
 	{
 		var fsmD = new FSM();
-		queue = [];
+
+		// init new start state (only 1)
+		var q0 = 0;
+		var q0DS = [];
 		for ( var q in Q ) {
 			if (! fsm.isI( q ) ) continue;
-			queue.push( [ q, sr.a1 ] );
+			q0DS.push( [ q, fsm.getI ( q ) ] );
 		}
+		var queue = [ q0DS ];
+		fsmD.setI( q0 );
+		fsmD.setN( q0DS.join( " / " ) );
 	
-		var qD = 0;	
-		// while ( queue != [] ) {
+		var pD = 0;	
+		while ( pD < 2 ) {
+		//while ( pD < queue.length ) {
 			
-			[ p, v ] = queue.shift();
-			//alert ( fsm.powersetQ( 3 ) );
+			pDS = queue[pD]; // pDS = [ [ 0, 1 ] ]: subset structure of source state pD
+			var wD = {}	// wD[a] = 123: weight of transition leaving with a
+			var qDS = {};	// qDS[a] = [ [ 1, 0.3 ], [ 2, 0.7 ] ]: subset structure of target state qD reached by a
 
-			var wD = 0;
-			var qD = queue.length - 1;
-			var qName = ""; 
-			for ( var q in Q[p][E] ) {
-				for ( var a in Q[p][E][q] ) {
-					w = fsm.getE( p, q, a, a ); // temporary assuming a WFS_A_ 
-					wD = sr.aSum(
-						wD,
-						sr.aProduct( v, w )
-					);
-					qName += q + "," + sr.aProduct( v, w ) + " / ";
+			for ( var i in pDS ) {
+				[ p, v ] = pDS[i];
+				for ( var q in Q[p][E] ) {
+					for ( var a in Q[p][E][q] ) {
+						// transition weight
+						w = fsm.getE( p, q, a, a ); // temporary assuming a WFS_A_ 
+						wD[a] = sr.aSum(
+							( wD[a] != undefined ? wD[a] : sr.a0 ),
+							sr.aProduct( v, w )
+						);
+					}
 				}
 			}
-			alert( wD + "\n" + qName );
+			for ( var i in pDS ) {
+				[ p, v ] = pDS[i];
+				for ( var q in Q[p][E] ) {
+					for ( var a in Q[p][E][q] ) {
+						// calculate subset structure of target state
+						w = fsm.getE( p, q, a, a ); // temporary assuming a WFS_A_ 
+						if ( qDS[a] == undefined ) qDS[a] = [];
+						qDS[a].push( 
+							[ 
+								q, 
+								sr.aProduct(
+									sr.aInverse( wD[a] ),
+									sr.aProduct( v, w )
+								)
+							] 
+						);
+					}
+				}
+			}
+			fsmD.ensureQ( pD );
+			for ( var a in symbols ) {
+				if ( qDS[a] == undefined ) continue;
 
-		// }
-		fsm = fsmD;
+				var qD = deepIndexOf( queue, qDS[a] );
+				if ( qD == -1 ) {
+					// add new state
+					var qD = fsmD.Q.length; 
+					var f = sr.a0;
+					for ( var i in qDS[a] ) {
+						[ q, v ] = qDS[a][i];
+						f = sr.aSum(
+							f,
+							sr.aProduct(
+								v,
+								fsm.getF( q )
+							)
+						);
+					}
+					fsmD.setF( qD, f );
+					queue.push( qDS[a] );
+				}
+
+				fsmD.setE( pD, qD, a, a, wD[a] );
+				fsmD.setN( qD, qDS[a].join( " / " ) );
+			}
+
+			//alert(pD + "\n" +  dump( queue ) );
+
+			pD++;
+
+		}
+		fsmD.print();
+		//alert( dump( fsmD.Q ) );
+/*
+		for ( var q in fsm.Q ) {
+			delete fsm.Q[q];
+		}
+		*/
+
+		//fsm = fsmD;
 
 	}
-*/
 
 	fsm.pushWeights = function()
 	{
@@ -928,9 +989,9 @@ runTests();
 //exampleReverse();
 
 //exampleRemoveEpsilon();
-//exampleDeterminize();
+exampleDeterminize();
 
-examplePushWeights();
+//examplePushWeights();
 
 //exampleSimple();
 
@@ -1340,21 +1401,23 @@ function examplePushWeights()
 
 }
 
-/*
 function exampleDeterminize()
 {
 	fsm = new FSM();
 	fsm.setE( 0, 1, 0, 0, 0.3 );
+	fsm.setE( 1, 1, 1, 1, 0.4 );
+	fsm.setE( 1, 3, 2, 2, 0.6 );
 	fsm.setE( 0, 2, 0, 0, 0.7 );
+	fsm.setE( 2, 2, 1, 1, 0.4 );
+	fsm.setE( 2, 3, 3, 3, 0.6 );
+	//fsm.setE( 0, 3, 1, 1, 0.5 );
 	fsm.setI( 0 );
-	fsm.setF( 1 );
-	fsm.setF( 2 );
+	fsm.setF( 3 );
 
   fsm.print();
 	fsm.determinize();
   fsm.print();
 }
-*/
 /**
  * Function : dump()
  * Arguments: The data - array,hash(associative array),object
