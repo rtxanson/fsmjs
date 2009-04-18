@@ -123,6 +123,16 @@ function FSM( )
 		}
 	}
 
+	// returns position of an element with same content of el in ar (deep copy)
+	// return -1 if el not in ar
+	function deepIndexOf( ar, el )
+	{
+		for ( var i in ar ) {
+			if ( serialize( ar[i] ) == serialize( el ) ) return i;
+		}
+		return -1;
+	}
+
 	// fsm helpers  --------------------------------------------------------------------
 
 	// calculates index for a new q
@@ -385,7 +395,11 @@ function FSM( )
 
 	// binary operations  --------------------------------------------------------------------
 
-	fsm.union = function( fsm2 )	// destroys fsm2
+	// creates union of fsm an fsm2
+	// (extends fsm with fsm2)
+	// fsm2 is unusable afterwards
+	// returns void
+	fsm.union = function( fsm2 )	
 	{
 		var q0 = fsm.swapI();
 		Q = Q.concat( fsm2.Q );
@@ -402,6 +416,10 @@ function FSM( )
 		fsm.isFSA = fsm.isFSA && fsm2.isFSA;
 	}
 
+	// concats fsm with fsm2
+	// (connects every word in fsm with every word in fsm2)
+	// fsm2 is unusable afterwards
+	// returns void
 	fsm.concat = function( fsm2 )	// destroys fsm2
 	{
 		var fsm1Length = Q.length;
@@ -592,10 +610,48 @@ function FSM( )
 		fsm.setF( q0 );
 	}
 
+	
+	fsm.singleSourceDistance = function( s )
+	{
+		var d = [];
+		var r = [];
+		for ( var q in Q ) {
+			d[q] = sr.a0;
+			r[q] = sr.a0;
+		}
+		d[s] = sr.a1;
+		r[s] = sr.a1;
+
+		var queue = [ s ]
+		var i = 0;
+		while ( queue.length > 0 ) {
+			i++;
+			p = queue.shift();
+			var rp = r[p];
+			r[p] = sr.a0;
+			for ( var q in Q[p][E] ) {
+				for ( var a in Q[p][E][q] ) {
+					for ( var b in Q[p][E][q][a] ) {
+						var w = fsm.getE( p, q, a, b );
+						//alert ( p + " " + w );
+						if ( d[q] == sr.aSum( d[q], sr.aProduct( rp, w ) ) ) continue;
+						d[q] = sr.aSum( d[q], sr.aProduct( rp, w ) )
+						r[q] = sr.aSum( r[q], sr.aProduct( rp, w ) )
+						if ( queue.indexOf( q ) == -1 ) {
+							queue.push( q );
+						}
+					}
+				}
+			}
+		}
+		return d;
+	}
+	
+
 	// calculates all-pairs-distance
 	// if symbols defined: only these symbols are considered
 	// returns distance matrix
-	fsm.distance = function( symbols )
+	fsm.allPairsDistance = function( symbols )
 	{
 		var d = [];
 		for ( var i in Q ) {
@@ -614,13 +670,11 @@ function FSM( )
 				}
 			}
 		}
-		//alert(dump(d));
 		for ( var k in Q ) {
 			for ( var i in Q ) {
 				if ( i == k ) continue;
 				for ( var j in Q ) {
 					if ( j == k ) continue;
-					//alert( "1) " + i + " -> " + k + " -> " + j + " : " + d[i][j] + " + " + d[i][k] + " x " + d[k][k] + "* x " + d[k][j] );
 					d[i][j] = sr.aSum( 
 						d[i][j],
 						sr.aProduct(
@@ -631,32 +685,21 @@ function FSM( )
 							)
 						)
 					);
-					//alert( d[i][j] );
-					//alert("1) " + i + " -> " + k + " -> " + j + " : " + d[i][j] );
-					//alert(k + ", " + d[k][k] + ", " + sr.aProductClosure( d[k][k] ) );
-					//alert( nextd[i][j] );
 				}
 			}
 			for ( var i in Q ) {
 				if ( i == k ) continue;
-				//alert( "2) " + k + " -> " + i + " : " + d[k][k] + "* x " + d[k][i] );
 				d[k][i] = sr.aProduct(
 					sr.aProductClosure( d[k][k] ),
-					//d[k][k], 
 					d[k][i]
 				);
-				//alert( d[k][i] );
-				//alert( "3) " + i + " -> " + k + " : " + d[i][k] + " x " + d[k][k] + "*" );
 				d[i][k] = sr.aProduct(
 					d[i][k],
 					sr.aProductClosure( d[k][k] )
-					//d[k][k] 
 				);
-				//alert( d[i][k] );
 			}
 			d[k][k] = sr.aProductClosure( d[k][k] )
 		}
-		//alert(dump(d));
 		return d;
 	}
 
@@ -664,7 +707,7 @@ function FSM( )
 
 	fsm.removeEpsilon = function()
 	{
-		var epsClosure = fsm.distance( [EPS] );
+		var epsClosure = fsm.allPairsDistance( [EPS] );
 		for ( p in Q ) {
 			for ( var q in epsClosure[p] ) {
 				if ( epsClosure[p][q] == sr.a0 ) continue;
@@ -711,14 +754,6 @@ function FSM( )
 		}
 	}
 
-	function deepIndexOf( ar, el )
-	{
-		for ( var i in ar ) {
-			if ( serialize( ar[i] ) == serialize( el ) ) return i;
-		}
-		return -1;
-	}
-
 	fsm.determinize = function()
 	{
 		var fsmD = new FSM();
@@ -735,8 +770,7 @@ function FSM( )
 		fsmD.setN( q0DS.join( " / " ) );
 	
 		var pD = 0;	
-		while ( pD < 2 ) {
-		//while ( pD < queue.length ) {
+		while ( pD < queue.length ) {
 			
 			pDS = queue[pD]; // pDS = [ [ 0, 1 ] ]: subset structure of source state pD
 			var wD = {}	// wD[a] = 123: weight of transition leaving with a
@@ -801,26 +835,23 @@ function FSM( )
 				fsmD.setN( qD, qDS[a].join( " / " ) );
 			}
 
-			//alert(pD + "\n" +  dump( queue ) );
-
 			pD++;
 
 		}
-		fsmD.print();
-		//alert( dump( fsmD.Q ) );
-/*
+
+		// replace fsm with fsmD
 		for ( var q in fsm.Q ) {
 			delete fsm.Q[q];
 		}
-		*/
-
-		//fsm = fsmD;
-
+		for ( var q in fsmD.Q ) {
+			fsm.Q[q] = fsmD.Q[q];
+		}
+		fsm = fsmD;
 	}
 
 	fsm.pushWeights = function()
 	{
-		var d = fsm.distance();
+		var d = fsm.allPairsDistance();
 		var pot = [];
 		for ( var p in Q ) {
 			for ( var q in Q ) {
@@ -834,7 +865,6 @@ function FSM( )
 				);
 			}
 		}
-		//alert( dump ( pot ) );
 		for ( var p in Q ) {
 			fsm.setI( 
 				p,
@@ -989,7 +1019,8 @@ runTests();
 //exampleReverse();
 
 //exampleRemoveEpsilon();
-exampleDeterminize();
+//exampleDeterminize();
+exampleSingleSourceDistance();
 
 //examplePushWeights();
 
@@ -1142,6 +1173,24 @@ function runTests()
 
 	return  ( serialize( fsm ) == 'a:2:{s:1:"Q";a:18:{i:0;a:3:{i:0;a:3:{i:1;a:1:{i:0;a:1:{i:0;i:2;}}i:2;a:1:{i:1;a:1:{i:1;i:2;}}i:3;a:1:{i:2;a:1:{i:2;i:4;}}}i:1;i:0;i:2;i:1;}i:1;a:3:{i:0;a:1:{i:15;a:1:{i:1;a:1:{i:1;i:1;}}}i:1;i:0;i:2;i:0;}i:2;a:3:{i:0;a:2:{i:11;a:1:{i:0;a:1:{i:0;d:0.5;}}i:12;a:1:{i:1;a:1:{i:1;d:0.5;}}}i:1;i:0;i:2;i:0;}i:3;a:3:{i:0;a:3:{i:4;a:1:{i:0;a:1:{i:0;d:0.25;}}i:5;a:1:{i:1;a:1:{i:1;d:0.5;}}i:6;a:1:{i:2;a:1:{i:2;d:0.25;}}}i:1;i:0;i:2;i:0;}i:4;a:3:{i:0;a:1:{i:10;a:1:{i:1;a:1:{i:1;i:1;}}}i:1;i:0;i:2;i:0;}i:5;a:3:{i:0;a:2:{i:8;a:1:{i:0;a:1:{i:0;d:0.5;}}i:9;a:1:{i:1;a:1:{i:1;d:0.5;}}}i:1;i:0;i:2;i:0;}i:6;a:3:{i:0;a:1:{i:7;a:1:{i:0;a:1:{i:0;i:1;}}}i:1;i:0;i:2;i:0;}i:7;a:3:{i:0;a:0:{}i:1;d:0.18;i:2;i:0;}i:8;a:3:{i:0;a:0:{}i:1;d:0.18;i:2;i:0;}i:9;a:3:{i:0;a:0:{}i:1;d:0.07;i:2;i:0;}i:10;a:3:{i:0;a:0:{}i:1;d:0.03;i:2;i:0;}i:11;a:3:{i:0;a:1:{i:14;a:1:{i:2;a:1:{i:2;i:1;}}}i:1;i:0;i:2;i:0;}i:12;a:3:{i:0;a:1:{i:13;a:1:{i:2;a:1:{i:2;i:1;}}}i:1;i:0;i:2;i:0;}i:13;a:3:{i:0;a:0:{}i:1;d:0.02;i:2;i:0;}i:14;a:3:{i:0;a:0:{}i:1;d:0.3;i:2;i:0;}i:15;a:3:{i:0;a:2:{i:16;a:1:{i:0;a:1:{i:0;d:0.5;}}i:17;a:1:{i:1;a:1:{i:1;d:0.5;}}}i:1;i:0;i:2;i:0;}i:16;a:3:{i:0;a:0:{}i:1;d:0.1;i:2;i:0;}i:17;a:3:{i:0;a:0:{}i:1;d:0.12;i:2;i:0;}}s:5:"isFSA";b:1;}' );
 	
+
+	},
+
+	determinize:  function () { 
+
+	fsm = new FSM();
+	fsm.setE( 0, 1, 0, 0, 0.3 );
+	fsm.setE( 1, 1, 1, 1, 0.4 );
+	fsm.setE( 1, 3, 2, 2, 0.6 );
+	fsm.setE( 0, 2, 0, 0, 0.7 );
+	fsm.setE( 2, 2, 1, 1, 0.4 );
+	fsm.setE( 2, 3, 3, 3, 0.6 );
+	fsm.setI( 0 );
+	fsm.setF( 3 );
+
+	fsm.determinize();
+	
+	return ( serialize( fsm ) == 'a:2:{s:1:"Q";a:4:{i:0;a:3:{i:0;a:1:{i:1;a:1:{i:0;a:1:{i:0;i:1;}}}i:1;i:0;i:2;i:1;}s:3:"0,1";a:4:{i:0;a:0:{}i:1;i:0;i:2;i:0;i:3;N;}i:1;a:4:{i:0;a:2:{i:1;a:1:{i:1;a:1:{i:1;d:0.4;}}i:2;a:2:{i:2;a:1:{i:2;d:0.18;}i:3;a:1:{i:3;d:0.42;}}}i:1;i:0;i:2;i:0;i:3;s:13:"1,0.3 / 2,0.7";}i:2;a:4:{i:0;a:0:{}i:1;i:1;i:2;i:0;i:3;s:3:"3,1";}}s:5:"isFSA";b:1;}' );
 
 	},
 
@@ -1410,7 +1459,6 @@ function exampleDeterminize()
 	fsm.setE( 0, 2, 0, 0, 0.7 );
 	fsm.setE( 2, 2, 1, 1, 0.4 );
 	fsm.setE( 2, 3, 3, 3, 0.6 );
-	//fsm.setE( 0, 3, 1, 1, 0.5 );
 	fsm.setI( 0 );
 	fsm.setF( 3 );
 
@@ -1418,6 +1466,19 @@ function exampleDeterminize()
 	fsm.determinize();
   fsm.print();
 }
+
+function exampleSingleSourceDistance()
+{
+	fsm = new FSM;
+	fsm.setE( 0, 1, 0, 0, 0.5 );
+	fsm.setE( 1, 3, 0, 0, 0.1 );
+	fsm.setE( 0, 1, 1, 1, 0.4 );
+	fsm.setE( 0, 2, 2, 2, 0.2 );
+	fsm.setE( 2, 2, 2, 2, 0.2 );
+	fsm.print();
+	alert( dump ( fsm.singleSourceDistance( 0 ) ) );
+}
+
 /**
  * Function : dump()
  * Arguments: The data - array,hash(associative array),object
