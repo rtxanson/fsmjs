@@ -834,19 +834,22 @@ function FSM( )
 				fsmD.setE( pD, qD, a, a, wD[a] );
 				fsmD.setN( qD, qDS[a].join( " / " ) );
 			}
-
 			pD++;
-
 		}
+		fsm.replace( fsmD );
+	}
 
+	// replaces fsm with fsmR
+	fsm.replace = function( fsmR ) 
+	{
 		// replace fsm with fsmD
 		for ( var q in fsm.Q ) {
 			delete fsm.Q[q];
 		}
-		for ( var q in fsmD.Q ) {
-			fsm.Q[q] = fsmD.Q[q];
+		for ( var q in fsmR.Q ) {
+			fsm.Q[q] = fsmR.Q[q];
 		}
-		fsm = fsmD;
+		fsm = fsmR;
 	}
 
 	fsm.pushWeights = function()
@@ -899,6 +902,64 @@ function FSM( )
 				}
 			}
 		}
+	}
+
+	fsm.minimize = function()
+	{
+		// classical algorithm
+		// assumes deterministic, pushed and trimmed wfsa
+		var neq = [];
+		for ( var p in Q ) {
+			neq[p] = [];
+			for ( var q in Q ) {
+				neq[p][q] =
+					( fsm.isF( p ) && ! fsm.isF( q ) ) ||
+					(! fsm.isF( p ) && fsm.isF( q ) );
+			}
+		}
+
+		var marked;
+		do {
+			marked = false;
+			for ( var p in Q ) {
+				for ( var q in Q ) {
+					if ( neq[p][q] ) continue;
+					for ( var pq in Q[p][E] ) {
+						for ( var qq in Q[q][E] ) {
+							neq[p][q] =
+								neq[pq][qq] ||
+								( serialize( Q[p][E][pq] ) != serialize( Q[q][E][qq] ) );
+						}
+					}
+				}
+			}
+		} while ( marked );
+
+		// map equivalence classes to new states
+		var map = {};
+		for ( var p in neq ) {
+			var q = 0;
+			while ( neq[p][q] ) {
+				q++;
+			}
+			map[p] = q;
+		}
+
+		// create new FSM
+		var fsmM = new FSM();
+		for ( var p in Q ) {
+			fsmM.setF( map[p], fsm.getF( p ) );
+			fsmM.setI( map[p], fsm.getI( p ) );
+			for ( var q in Q[p][E] ) {
+				for ( var a in Q[p][E][q] ) {
+					for ( var b in Q[p][E][q][a] ) {
+						var w = fsm.getE( p, q, a, b );
+						fsmM.setE( map[p], map[q], a, b, w );
+					}
+				}
+			}
+		}
+		fsm.replace( fsmM );
 	}
 
 	fsm.connect = function()
@@ -1020,10 +1081,10 @@ runTests();
 
 //exampleRemoveEpsilon();
 //exampleDeterminize();
-exampleSingleSourceDistance();
+//exampleSingleSourceDistance();
 
 //examplePushWeights();
-
+exampleMinimize();
 //exampleSimple();
 
 //exampleClosure();
@@ -1191,6 +1252,22 @@ function runTests()
 	fsm.determinize();
 	
 	return ( serialize( fsm ) == 'a:2:{s:1:"Q";a:4:{i:0;a:3:{i:0;a:1:{i:1;a:1:{i:0;a:1:{i:0;i:1;}}}i:1;i:0;i:2;i:1;}s:3:"0,1";a:4:{i:0;a:0:{}i:1;i:0;i:2;i:0;i:3;N;}i:1;a:4:{i:0;a:2:{i:1;a:1:{i:1;a:1:{i:1;d:0.4;}}i:2;a:2:{i:2;a:1:{i:2;d:0.18;}i:3;a:1:{i:3;d:0.42;}}}i:1;i:0;i:2;i:0;i:3;s:13:"1,0.3 / 2,0.7";}i:2;a:4:{i:0;a:0:{}i:1;i:1;i:2;i:0;i:3;s:3:"3,1";}}s:5:"isFSA";b:1;}' );
+
+	},
+
+	minimize: function() {
+
+	fsm = new FSM;
+	fsm.setE( 0, 1, 0, 0 );
+	fsm.setE( 1, 2, 1, 1 );
+	fsm.setE( 0, 3, 0, 0 );
+	fsm.setE( 3, 4, 1, 1 );
+	fsm.setI( 0 );
+	fsm.setF( 2 );
+	fsm.setF( 4 );
+	fsm.minimize();
+
+	return ( serialize( fsm ) == 'a:2:{s:1:"Q";a:3:{i:0;a:3:{i:0;a:1:{i:1;a:1:{i:0;a:1:{i:0;i:2;}}}i:1;i:0;i:2;i:1;}i:1;a:3:{i:0;a:1:{i:2;a:1:{i:1;a:1:{i:1;i:2;}}}i:1;i:0;i:2;i:0;}i:2;a:3:{i:0;a:0:{}i:1;i:1;i:2;i:0;}}s:5:"isFSA";b:1;}' );
 
 	},
 
@@ -1477,6 +1554,21 @@ function exampleSingleSourceDistance()
 	fsm.setE( 2, 2, 2, 2, 0.2 );
 	fsm.print();
 	alert( dump ( fsm.singleSourceDistance( 0 ) ) );
+}
+
+function exampleMinimize()
+{
+	fsm = new FSM;
+	fsm.setE( 0, 1, 0, 0 );
+	fsm.setE( 1, 2, 1, 1 );
+	fsm.setE( 0, 3, 0, 0 );
+	fsm.setE( 3, 4, 1, 1 );
+	fsm.setI( 0 );
+	fsm.setF( 2 );
+	fsm.setF( 4 );
+	fsm.print();
+	fsm.minimize();
+	fsm.print();
 }
 
 /**
