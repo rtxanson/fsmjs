@@ -1,6 +1,6 @@
 
-runTests();
-
+//runTests();
+//exampleRemoveEpsilon2();
 exampleClosure();
 exampleClosureTropical();
 
@@ -17,10 +17,24 @@ exampleDeterminize();
 examplePushWeights();
 exampleMinimize();
 
-//exampleSingleSourceDistance();
+exampleSingleSourceDistance();
 //alert( dump( fsm1.epsClosure(0) ) );
 //alert( dump( fsm1.epsClosure(1) ) );
 
+function exampleRemoveEpsilon2()
+{
+	document.write( "<h3> Remove Epsilon 2</h3>");
+	fsm = new FSM();
+
+	fsm.setE( 0, 0, EPS, EPS, 0.2 );
+
+	fsm.setI( 0 );
+	fsm.setF( 0, 0.3 );
+
+	fsm.print();
+	fsm.removeEpsilon();
+	fsm.print();
+}
 
 function exampleRemoveEpsilon()
 {
@@ -257,7 +271,7 @@ function examplePushWeights()
 
 function exampleDeterminize()
 {
-	document.write( "<h3> Detrminize </h3>");
+	document.write( "<h3> Determinize </h3>");
 	fsm = new FSM();
 	fsm.setE( 0, 1, 0, 0, 0.3 );
 	fsm.setE( 1, 1, 1, 1, 0.4 );
@@ -291,6 +305,7 @@ function exampleMinimize()
 
 function exampleSingleSourceDistance()
 {
+	document.write( "<h3> Single Source Distance </h3>");
 	fsm = new FSM;
 	fsm.setE( 0, 1, 0, 0, 0.5 );
 	fsm.setE( 1, 3, 0, 0, 0.1 );
@@ -298,7 +313,10 @@ function exampleSingleSourceDistance()
 	fsm.setE( 0, 2, 2, 2, 0.2 );
 	fsm.setE( 2, 2, 2, 2, 0.2 );
 	fsm.print();
-	alert( dump ( fsm.singleSourceDistance( 0 ) ) );
+	document.write( '<textarea cols="30" rows="10">' );
+	document.write( "Distances from state 0:\n" );
+	document.write( dump ( fsm.singleSourceDistance( 0 ) ) );
+	document.write( "</textarea>" );
 }
 
 function runTests()

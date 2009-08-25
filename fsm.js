@@ -708,9 +708,20 @@ function FSM( )
 	fsm.removeEpsilon = function()
 	{
 		var epsClosure = fsm.allPairsDistance( [EPS] );
+		//alert( dump( epsClosure ) );
 		for ( p in Q ) {
 			for ( var q in epsClosure[p] ) {
 				if ( epsClosure[p][q] == sr.a0 ) continue;
+				fsm.setF(
+					p,
+					sr.aSum(
+						( p != q ?  fsm.getF( p ) : sr.a0 ), // Mohri always uses here fsm.getF(p) 
+						sr.aProduct(
+							epsClosure[p][q],
+							fsm.getF( q )
+						)
+					)
+				);
 				for ( var r in Q[q][E] ) {
 					for ( var a in Q[q][E][r] ) {
 						if ( a == EPS ) continue;
@@ -725,16 +736,6 @@ function FSM( )
 								sr.aProduct( 
 									epsClosure[p][q], 
 									w
-								)
-							);
-							fsm.setF(
-								p,
-								sr.aSum(
-									( p != q ?  fsm.getF( p ) : sr.a0 ), // Mohri always uses here fsm.getF(p) here
-									sr.aProduct(
-										epsClosure[p][q],
-										fsm.getF( q )
-									)
 								)
 							);
 /*
