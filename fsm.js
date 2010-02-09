@@ -118,7 +118,7 @@ function FSM( )
 	// returns void
 	function extendObject( obj1, obj2 )
 	{
-		for (attrname in obj2) { 
+		for (var attrname in obj2)  { 
 			obj1[attrname] = obj2[attrname]; 
 		}
 	}
@@ -132,6 +132,96 @@ function FSM( )
 		}
 		return -1;
 	}
+
+	function serialize( mixed_value )
+	{
+		// http://kevin.vanzonneveld.net
+		// +   original by: Arpad Ray (mailto:arpad@php.net)
+		// +   improved by: Dino
+		// +   bugfixed by: Andrej Pavlovic
+		// +   bugfixed by: Garagoth
+		// %          note: We feel the main purpose of this function should be to
+		// ease the transport of data between php & js
+		// %          note: Aiming for PHP-compatibility, we have to translate
+		// objects to arrays
+		// *     example 1: serialize(['Kevin', 'van', 'Zonneveld']);
+		// *     returns 1:
+		// 'a:3:{i:0;s:5:"Kevin";i:1;s:3:"van";i:2;s:9:"Zonneveld";}'
+		// *     example 2: serialize({firstName: 'Kevin', midName: 'van',
+		// surName: 'Zonneveld'});
+		// *     returns 2:
+		// 'a:3:{s:9:"firstName";s:5:"Kevin";s:7:"midName";s:3:"van";s:7:"surName";s:9:"Zonneveld";}'
+	 
+		var _getType = function( inp ) {
+			var type = typeof inp, match;
+			var key;
+			if (type == 'object' && !inp) {
+				return 'null';
+			}
+			if (type == "object") {
+				if (!inp.constructor) {
+					return 'object';
+				}
+				var cons = inp.constructor.toString();
+				match = cons.match(/(\w+)\(/);
+				if (match) {
+					cons = match[1].toLowerCase();
+				}
+				var types = ["boolean", "number", "string", "array"];
+				for (key in types) {
+					if (cons == types[key]) {
+						type = types[key];
+						break;
+					}
+				}
+			}
+			return type;
+		};
+		var type = _getType(mixed_value);
+		var val = '';
+		var ktype = '';
+		
+		switch (type) {
+			case "function": 
+				val = ""; 
+				break;
+			case "undefined":
+				val = "N";
+				break;
+			case "boolean":
+				val = "b:" + (mixed_value ? "1" : "0");
+				break;
+			case "number":
+				val = (Math.round(mixed_value) == mixed_value ? "i" : "d") + ":" + mixed_value;
+				break;
+			case "string":
+				val = "s:" + mixed_value.length + ":\"" + mixed_value + "\"";
+				break;
+			case "array":
+			case "object":
+				val = "a";
+				var count = 0;
+				var vals = "";
+				var okey;
+				var key;
+				for (key in mixed_value) {
+					ktype = _getType(mixed_value[key]);
+					if (ktype == "function") { 
+						continue; 
+					}
+					
+					okey = (key.match(/^[0-9]+$/) ? parseInt(key) : key);
+					vals += serialize(okey) +
+							serialize(mixed_value[key]);
+					count++;
+				}
+				val += ":" + count + ":{" + vals + "}";
+				break;
+		}
+		if (type != "object" && type != "array") val += ";";
+		return val;
+	}
+
 
 	// fsm helpers  --------------------------------------------------------------------
 
@@ -247,10 +337,10 @@ function FSM( )
 	fsm.hasE = function( p, a, b ) 
 	{
 		//if ( b == undefined ) b = a;
-		for ( q in Q[p][E] ) {
-			for ( ai in Q[p][E][q] ) {
+		for ( var q in Q[p][E] ) { 
+			for ( var ai in Q[p][E][q] ) { 
 				if ( ( a != undefined ) && ( a != ai ) ) continue;
-				for ( bi in Q[p][E][q][ai] ) {
+				for ( var bi in Q[p][E][q][ai] ) { 
 					if ( ( b != undefined ) && ( b != bi ) ) continue;
 					return true;
 				}
@@ -425,7 +515,7 @@ function FSM( )
 		var fsm1Length = Q.length;
 		Q = Q.concat( fsm2.Q );
 
-		fsm2I = {};
+		var fsm2I = {}; 
 		for ( var q in Q ) {
 			if ( q < fsm1Length ) continue;
 			fsm.transposeE( q, fsm1Length );
@@ -486,7 +576,7 @@ function FSM( )
 	fsm.compose = function( fsm1, fsm2 )
 	{
 		fsm1.renameE( EPS, EPS1 );
-		for ( q in fsm1.Q ) {
+		for (var  q in fsm1.Q ) { 
 			fsm1.setE( q, q, EPS2, EPS2 );
 		}
 		fsm1.print();	
@@ -497,7 +587,7 @@ function FSM( )
 		}
 		fsm2.print();	
 
-		fsmEpsFilter = new FSM();
+		var fsmEpsFilter = new FSM(); 
 		for ( var ab in symbols ) {
 			if ( ab < 0 ) continue;
 			fsmEpsFilter.setE( 0, 0, ab );
@@ -518,7 +608,7 @@ function FSM( )
 
 		//fsmEpsFilter.print();
 
-		fsm1Filtered = new FSM();
+		var fsm1Filtered = new FSM(); 
 		fsm1Filtered.composeDo( fsm1, fsmEpsFilter );
 
 		//fsm1Filtered.trim();
@@ -626,7 +716,7 @@ function FSM( )
 		var i = 0;
 		while ( queue.length > 0 ) {
 			i++;
-			p = queue.shift();
+			var p = queue.shift(); 
 			var rp = r[p];
 			r[p] = sr.a0;
 			for ( var q in Q[p][E] ) {
@@ -709,7 +799,7 @@ function FSM( )
 	{
 		var epsClosure = fsm.allPairsDistance( [EPS] );
 		//alert( dump( epsClosure ) );
-		for ( p in Q ) {
+		for ( var p in Q ) { 
 			for ( var q in epsClosure[p] ) {
 				if ( epsClosure[p][q] == sr.a0 ) continue;
 				fsm.setF(
@@ -773,16 +863,17 @@ function FSM( )
 		var pD = 0;	
 		while ( pD < queue.length ) {
 			
-			pDS = queue[pD]; // pDS = [ [ 0, 1 ] ]: subset structure of source state pD
+			var pDS = queue[pD]; // pDS = [ [ 0, 1 ] ]: subset structure of source state pD 
 			var wD = {}	// wD[a] = 123: weight of transition leaving with a
 			var qDS = {};	// qDS[a] = [ [ 1, 0.3 ], [ 2, 0.7 ] ]: subset structure of target state qD reached by a
 
 			for ( var i in pDS ) {
-				[ p, v ] = pDS[i];
+				var p = pDS[i][0];
+				var v = pDS[i][1];
 				for ( var q in Q[p][E] ) {
 					for ( var a in Q[p][E][q] ) {
 						// transition weight
-						w = fsm.getE( p, q, a, a ); // temporary assuming a WFS_A_ 
+						var w = fsm.getE( p, q, a, a ); // temporary assuming a WFS_A_  
 						wD[a] = sr.aSum(
 							( wD[a] != undefined ? wD[a] : sr.a0 ),
 							sr.aProduct( v, w )
@@ -791,7 +882,8 @@ function FSM( )
 				}
 			}
 			for ( var i in pDS ) {
-				[ p, v ] = pDS[i];
+				var p = pDS[i][0];
+				var v = pDS[i][1];
 				for ( var q in Q[p][E] ) {
 					for ( var a in Q[p][E][q] ) {
 						// calculate subset structure of target state
@@ -819,7 +911,8 @@ function FSM( )
 					var qD = fsmD.Q.length; 
 					var f = sr.a0;
 					for ( var i in qDS[a] ) {
-						[ q, v ] = qDS[a][i];
+						var q = qDS[a][i][0];
+						var v = qDS[a][i][1];
 						f = sr.aSum(
 							f,
 							sr.aProduct(
@@ -919,7 +1012,7 @@ function FSM( )
 			}
 		}
 
-		var marked;
+		var marked = false;
 		do {
 			marked = false;
 			for ( var p in Q ) {
@@ -965,7 +1058,7 @@ function FSM( )
 
 	fsm.connect = function()
 	{
-		accessibleQ = {};
+		var accessibleQ = {}; 
 		for ( var q in Q ) {
 			if (! fsm.isI( q ) ) continue;
 			accessibleQ[q] = true;
